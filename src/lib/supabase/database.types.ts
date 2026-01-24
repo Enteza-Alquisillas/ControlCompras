@@ -240,7 +240,41 @@ export type Database = {
           rental_status: string
         }[]
       }
+      get_article_reservations_optimized: {
+        Args: {
+          p_article_id: string
+          start_date?: string | null
+          end_date?: string | null
+        }
+        Returns: {
+          reservation_date: string
+          rental_id: string
+          customer_name: string
+          quantity: number
+          delivery_date: string
+          pickup_date: string
+          delivery_address: string | null
+          event_date: string
+        }[]
+      }
       get_stock_breakages: {
+        Args: {
+          start_date?: string | null
+          end_date?: string | null
+        }
+        Returns: {
+          article_id: string
+          article_code: string | null
+          article_description: string
+          breakage_date: string
+          total_stock: number
+          committed: number
+          available: number
+          stock_sevilla: number
+          stock_jerez: number
+        }[]
+      }
+      get_stock_breakages_optimized: {
         Args: {
           start_date?: string | null
           end_date?: string | null

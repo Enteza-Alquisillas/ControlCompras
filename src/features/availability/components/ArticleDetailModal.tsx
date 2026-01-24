@@ -6,6 +6,7 @@ import { ArticleBreakageSummary } from '../types'
 
 interface ArticleDetailModalProps {
   article: ArticleBreakageSummary | null
+  selectedDate?: string
   onClose: () => void
 }
 
@@ -18,11 +19,18 @@ function formatDate(dateStr: string): string {
   })
 }
 
-export function ArticleDetailModal({ article, onClose }: ArticleDetailModalProps) {
+export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDetailModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const { reservations, isLoading, error } = useArticleDetail(
     article?.articleId || null
   )
+
+  // Filter reservations to show only those active on the selected date
+  const filteredReservations = selectedDate
+    ? reservations.filter(
+      (r) => r.delivery_date <= selectedDate && r.pickup_date >= selectedDate
+    )
+    : reservations
 
   // Close on escape key
   useEffect(() => {
@@ -48,7 +56,7 @@ export function ArticleDetailModal({ article, onClose }: ArticleDetailModalProps
 
   // Calculate running totals for display
   let runningTotal = 0
-  const reservationsWithTotals = reservations.map((r) => {
+  const reservationsWithTotals = filteredReservations.map((r) => {
     runningTotal += r.quantity
     const available = article.totalStock - runningTotal
     return {
@@ -75,6 +83,14 @@ export function ArticleDetailModal({ article, onClose }: ArticleDetailModalProps
               {article.articleCode && `Codigo: ${article.articleCode} · `}
               Stock total: {article.totalStock} unidades
               (Sevilla: {article.stockSevilla} / Jerez: {article.stockJerez})
+              {selectedDate && (
+                <>
+                  <br />
+                  <span className="text-blue-600 font-medium">
+                    Mostrando reservas activas el {formatDate(selectedDate)}
+                  </span>
+                </>
+              )}
             </p>
           </div>
           <button
@@ -97,9 +113,11 @@ export function ArticleDetailModal({ article, onClose }: ArticleDetailModalProps
             <div className="text-center py-12 text-red-600">
               Error: {error}
             </div>
-          ) : reservations.length === 0 ? (
+          ) : filteredReservations.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              No hay reservas para este articulo
+              {selectedDate
+                ? `No hay reservas activas el ${formatDate(selectedDate)}`
+                : 'No hay reservas para este articulo'}
             </div>
           ) : (
             <table className="w-full">
@@ -174,7 +192,13 @@ export function ArticleDetailModal({ article, onClose }: ArticleDetailModalProps
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
             <p className="text-sm text-gray-500">
-              {reservations.length} reservas encontradas
+              {filteredReservations.length} reservas encontradas
+              {selectedDate && reservations.length !== filteredReservations.length && (
+                <span className="text-gray-400">
+                  {' '}
+                  ({reservations.length} total en el rango)
+                </span>
+              )}
             </p>
             <button
               onClick={onClose}

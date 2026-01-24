@@ -14,7 +14,10 @@ export function StockBreakageList() {
     startDate: startDate.toISOString().split('T')[0],
     endDate: endDate.toISOString().split('T')[0],
   })
-  const [selectedArticle, setSelectedArticle] = useState<ArticleBreakageSummary | null>(null)
+  const [selectedArticle, setSelectedArticle] = useState<{
+    article: ArticleBreakageSummary
+    selectedDate: string
+  } | null>(null)
 
   if (isLoading) {
     return (
@@ -118,7 +121,12 @@ export function StockBreakageList() {
                 <StockBreakageRow
                   key={breakage.articleId}
                   breakage={breakage}
-                  onClick={() => setSelectedArticle(breakage)}
+                  onClick={() =>
+                    setSelectedArticle({
+                      article: breakage,
+                      selectedDate: breakage.firstBreakageDate,
+                    })
+                  }
                 />
               ))}
             </tbody>
@@ -128,7 +136,8 @@ export function StockBreakageList() {
 
       {/* Detail Modal */}
       <ArticleDetailModal
-        article={selectedArticle}
+        article={selectedArticle?.article || null}
+        selectedDate={selectedArticle?.selectedDate}
         onClose={() => setSelectedArticle(null)}
       />
     </>

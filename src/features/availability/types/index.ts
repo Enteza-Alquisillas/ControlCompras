@@ -1,7 +1,8 @@
-import { StockBreakage, ArticleReservation } from '@/lib/supabase/database.types'
+import { Functions } from '@/lib/supabase/database.types'
 
-// Re-export from database types
-export type { StockBreakage, ArticleReservation }
+// Use optimized function return types
+export type StockBreakage = Functions<'get_stock_breakages_optimized'>['Returns'][number]
+export type ArticleReservation = Functions<'get_article_reservations_optimized'>['Returns'][number]
 
 // Grouped breakages by article (for the main list)
 export interface ArticleBreakageSummary {
