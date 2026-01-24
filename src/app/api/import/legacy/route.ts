@@ -3,20 +3,20 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const configs = {
   SEVILLA: {
-    server: process.env.SEVILLA_SQL_SERVER!,
-    database: process.env.SEVILLA_SQL_DATABASE!,
-    user: process.env.SEVILLA_SQL_USER!,
-    password: process.env.SEVILLA_SQL_PASSWORD!,
+    server: process.env.SEVILLA_SQL_SERVER || '',
+    database: process.env.SEVILLA_SQL_DATABASE || '',
+    user: process.env.SEVILLA_SQL_USER || '',
+    password: process.env.SEVILLA_SQL_PASSWORD || '',
     options: {
       encrypt: false,
       trustServerCertificate: true,
     },
   },
   JEREZ: {
-    server: process.env.JEREZ_SQL_SERVER!,
-    database: process.env.JEREZ_SQL_DATABASE!,
-    user: process.env.JEREZ_SQL_USER!,
-    password: process.env.JEREZ_SQL_PASSWORD!,
+    server: process.env.JEREZ_SQL_SERVER || '',
+    database: process.env.JEREZ_SQL_DATABASE || '',
+    user: process.env.JEREZ_SQL_USER || '',
+    password: process.env.JEREZ_SQL_PASSWORD || '',
     options: {
       encrypt: false,
       trustServerCertificate: true,
