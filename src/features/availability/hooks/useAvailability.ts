@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { availabilityService } from '../services/availabilityService'
-import { ArticleBreakageSummary, AvailabilityFilters } from '../types'
+import { StockBreakage, AvailabilityFilters } from '../types'
 
 interface UseAvailabilityReturn {
-  breakages: ArticleBreakageSummary[]
+  breakages: StockBreakage[]
   isLoading: boolean
   error: string | null
   filters: AvailabilityFilters
@@ -16,7 +16,7 @@ interface UseAvailabilityReturn {
 export function useAvailability(
   initialFilters?: AvailabilityFilters
 ): UseAvailabilityReturn {
-  const [breakages, setBreakages] = useState<ArticleBreakageSummary[]>([])
+  const [breakages, setBreakages] = useState<StockBreakage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<AvailabilityFilters>(
@@ -28,12 +28,12 @@ export function useAvailability(
     setError(null)
 
     try {
+      // Don't group - show each breakage date separately for accurate detail view
       const rawBreakages = await availabilityService.getStockBreakages(
         filters.startDate,
         filters.endDate
       )
-      const grouped = availabilityService.groupBreakagesByArticle(rawBreakages)
-      setBreakages(grouped)
+      setBreakages(rawBreakages)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {

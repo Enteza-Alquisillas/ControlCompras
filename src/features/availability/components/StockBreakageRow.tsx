@@ -1,10 +1,10 @@
 'use client'
 
-import { ArticleBreakageSummary } from '../types'
+import { StockBreakage } from '../types'
 import { AvailabilityBadge } from './AvailabilityBadge'
 
 interface StockBreakageRowProps {
-  breakage: ArticleBreakageSummary
+  breakage: StockBreakage
   onClick: () => void
 }
 
@@ -18,32 +18,29 @@ function formatDate(dateStr: string): string {
 }
 
 export function StockBreakageRow({ breakage, onClick }: StockBreakageRowProps) {
+  const deficit = Math.abs(breakage.available)
+
   return (
     <tr
       onClick={onClick}
       className="hover:bg-gray-50 cursor-pointer transition-colors border-b border-gray-100"
     >
-      {/* Fecha primera rotura */}
+      {/* Fecha evento (breakage_date) */}
       <td className="px-4 py-3 whitespace-nowrap">
         <span className="text-sm font-medium text-gray-900">
-          {formatDate(breakage.firstBreakageDate)}
+          {formatDate(breakage.breakage_date)}
         </span>
-        {breakage.breakageDates.length > 1 && (
-          <span className="ml-2 text-xs text-gray-500">
-            (+{breakage.breakageDates.length - 1} dias)
-          </span>
-        )}
       </td>
 
       {/* Articulo */}
       <td className="px-4 py-3">
         <div className="flex flex-col">
           <span className="text-sm font-medium text-gray-900">
-            {breakage.articleDescription}
+            {breakage.article_description}
           </span>
-          {breakage.articleCode && (
+          {breakage.article_code && (
             <span className="text-xs text-gray-500">
-              Cod: {breakage.articleCode}
+              Cod: {breakage.article_code}
             </span>
           )}
         </div>
@@ -52,33 +49,33 @@ export function StockBreakageRow({ breakage, onClick }: StockBreakageRowProps) {
       {/* Ventas (comprometido) */}
       <td className="px-4 py-3 text-center">
         <span className="text-sm font-semibold text-gray-900">
-          {breakage.maxCommitted}
+          {breakage.committed}
         </span>
       </td>
 
       {/* Existencias (stock total) */}
       <td className="px-4 py-3 text-center">
         <span className="text-sm text-gray-700">
-          {breakage.totalStock}
+          {breakage.total_stock}
         </span>
       </td>
 
       {/* Falta (deficit) */}
       <td className="px-4 py-3 text-center">
-        <AvailabilityBadge deficit={breakage.maxDeficit} />
+        <AvailabilityBadge deficit={deficit} />
       </td>
 
       {/* Stock Sevilla */}
       <td className="px-4 py-3 text-center">
         <span className="text-sm text-gray-600">
-          {breakage.stockSevilla}
+          {breakage.stock_sevilla}
         </span>
       </td>
 
       {/* Stock Jerez */}
       <td className="px-4 py-3 text-center">
         <span className="text-sm text-gray-600">
-          {breakage.stockJerez}
+          {breakage.stock_jerez}
         </span>
       </td>
     </tr>

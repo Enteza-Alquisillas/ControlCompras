@@ -2,11 +2,10 @@
 
 import { useEffect, useRef } from 'react'
 import { useArticleDetail } from '../hooks/useArticleDetail'
-import { ArticleBreakageSummary } from '../types'
+import { StockBreakage } from '../types'
 
 interface ArticleDetailModalProps {
-  article: ArticleBreakageSummary | null
-  selectedDate?: string
+  breakage: StockBreakage | null
   onClose: () => void
 }
 
@@ -19,18 +18,34 @@ function formatDate(dateStr: string): string {
   })
 }
 
-export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDetailModalProps) {
+export function ArticleDetailModal({ breakage, onClose }: ArticleDetailModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const { reservations, isLoading, error } = useArticleDetail(
-    article?.articleId || null
+    breakage?.article_id || null
   )
 
-  // Filter reservations to show only those active on the selected date
-  const filteredReservations = selectedDate
-    ? reservations.filter(
-      (r) => r.delivery_date <= selectedDate && r.pickup_date >= selectedDate
+  // Filter reservations to show only those active on the breakage_date (event date)
+  // A reservation is active if: delivery_date <= breakage_date <= pickup_date
+  const filteredReservations = (() => {
+    if (!breakage) return []
+
+    const eventDate = breakage.breakage_date
+
+    const filtered = reservations.filter(
+      (r) => r.delivery_date <= eventDate && r.pickup_date >= eventDate
     )
-    : reservations
+
+    // Deduplicate by rental_id + quantity combination
+    const seen = new Set<string>()
+    const deduped = filtered.filter((r) => {
+      const key = `${r.rental_id}_${r.quantity}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    return deduped
+  })()
 
   // Close on escape key
   useEffect(() => {
@@ -52,13 +67,13 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
-  if (!article) return null
+  if (!breakage) return null
 
   // Calculate running totals for display
   let runningTotal = 0
   const reservationsWithTotals = filteredReservations.map((r) => {
     runningTotal += r.quantity
-    const available = article.totalStock - runningTotal
+    const available = breakage.total_stock - runningTotal
     return {
       ...r,
       runningTotal,
@@ -66,6 +81,9 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
       isOverbooked: available < 0,
     }
   })
+
+  // Calculate sum of quantities to verify it matches committed
+  const totalQuantity = filteredReservations.reduce((sum, r) => sum + r.quantity, 0)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -77,20 +95,16 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-start">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
-              {article.articleDescription}
+              {breakage.article_description}
             </h2>
             <p className="text-sm text-gray-500 mt-1">
-              {article.articleCode && `Codigo: ${article.articleCode} · `}
-              Stock total: {article.totalStock} unidades
-              (Sevilla: {article.stockSevilla} / Jerez: {article.stockJerez})
-              {selectedDate && (
-                <>
-                  <br />
-                  <span className="text-blue-600 font-medium">
-                    Mostrando reservas activas el {formatDate(selectedDate)}
-                  </span>
-                </>
-              )}
+              {breakage.article_code && `Codigo: ${breakage.article_code} · `}
+              Stock total: {breakage.total_stock} unidades
+              (Sevilla: {breakage.stock_sevilla} / Jerez: {breakage.stock_jerez})
+              <br />
+              <span className="text-blue-600 font-medium">
+                Fecha evento: {formatDate(breakage.breakage_date)}
+              </span>
             </p>
           </div>
           <button
@@ -115,9 +129,7 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
             </div>
           ) : filteredReservations.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              {selectedDate
-                ? `No hay reservas activas el ${formatDate(selectedDate)}`
-                : 'No hay reservas para este articulo'}
+              No hay reservas activas el {formatDate(breakage.breakage_date)}
             </div>
           ) : (
             <table className="w-full">
@@ -144,9 +156,9 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
                 </tr>
               </thead>
               <tbody>
-                {reservationsWithTotals.map((r, idx) => (
+                {reservationsWithTotals.map((r) => (
                   <tr
-                    key={r.rental_id + idx}
+                    key={r.rental_id}
                     className={`border-b border-gray-100 ${r.isOverbooked ? 'bg-red-50' : ''
                       }`}
                   >
@@ -191,15 +203,18 @@ export function ArticleDetailModal({ article, selectedDate, onClose }: ArticleDe
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
-            <p className="text-sm text-gray-500">
-              {filteredReservations.length} reservas encontradas
-              {selectedDate && reservations.length !== filteredReservations.length && (
-                <span className="text-gray-400">
-                  {' '}
-                  ({reservations.length} total en el rango)
-                </span>
-              )}
-            </p>
+            <div className="text-sm text-gray-500">
+              <span>{filteredReservations.length} reservas</span>
+              <span className="mx-2">·</span>
+              <span>
+                Total ventas: <span className="font-semibold text-gray-900">{totalQuantity}</span>
+                {totalQuantity !== breakage.committed && (
+                  <span className="text-amber-600 ml-1">
+                    (esperado: {breakage.committed})
+                  </span>
+                )}
+              </span>
+            </div>
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md text-sm font-medium transition-colors"

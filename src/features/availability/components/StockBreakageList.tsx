@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useAvailability } from '../hooks/useAvailability'
 import { useFilterStore } from '../store/filterStore'
-import { ArticleBreakageSummary } from '../types'
+import { StockBreakage } from '../types'
 import { StockBreakageRow } from './StockBreakageRow'
 import { ArticleDetailModal } from './ArticleDetailModal'
 import { DateRangeFilter } from './DateRangeFilter'
@@ -14,10 +14,7 @@ export function StockBreakageList() {
     startDate: startDate.toISOString().split('T')[0],
     endDate: endDate.toISOString().split('T')[0],
   })
-  const [selectedArticle, setSelectedArticle] = useState<{
-    article: ArticleBreakageSummary
-    selectedDate: string
-  } | null>(null)
+  const [selectedBreakage, setSelectedBreakage] = useState<StockBreakage | null>(null)
 
   if (isLoading) {
     return (
@@ -119,14 +116,9 @@ export function StockBreakageList() {
             <tbody className="divide-y divide-gray-100">
               {breakages.map((breakage) => (
                 <StockBreakageRow
-                  key={breakage.articleId}
+                  key={`${breakage.article_id}_${breakage.breakage_date}`}
                   breakage={breakage}
-                  onClick={() =>
-                    setSelectedArticle({
-                      article: breakage,
-                      selectedDate: breakage.firstBreakageDate,
-                    })
-                  }
+                  onClick={() => setSelectedBreakage(breakage)}
                 />
               ))}
             </tbody>
@@ -136,9 +128,8 @@ export function StockBreakageList() {
 
       {/* Detail Modal */}
       <ArticleDetailModal
-        article={selectedArticle?.article || null}
-        selectedDate={selectedArticle?.selectedDate}
-        onClose={() => setSelectedArticle(null)}
+        breakage={selectedBreakage}
+        onClose={() => setSelectedBreakage(null)}
       />
     </>
   )
