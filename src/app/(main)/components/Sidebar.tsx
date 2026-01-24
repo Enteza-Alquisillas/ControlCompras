@@ -59,12 +59,12 @@ export function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-200">
-        <Link href="/dashboard" className="flex items-center gap-3">
+      <div className="h-20 flex items-center justify-center px-6 border-b border-gray-200 bg-white">
+        <Link href="/dashboard" className="w-full">
           <img
             src="/enteza-logo.png"
             alt="ENTEZA"
-            className="h-10 w-auto object-contain"
+            className="w-full h-auto max-h-16 object-contain"
           />
         </Link>
       </div>
