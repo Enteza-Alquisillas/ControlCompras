@@ -1,0 +1,13 @@
+{
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "next-devtools",
+    "playwright",
+    "supabase"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(./node_modules/.bin/tsc:*)"
+    ]
+  }
+}

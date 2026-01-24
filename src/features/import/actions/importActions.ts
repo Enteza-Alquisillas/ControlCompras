@@ -1,0 +1,247 @@
+'use server'
+
+import { createAdminClient } from '@/lib/supabase/server'
+import { ImportResult } from '../types'
+import { legacyService } from '../services/legacyService'
+
+/**
+ * Helper to process array in chunks
+ */
+async function processInChunks<T>(items: T[], chunkSize: number, fn: (chunk: T[]) => Promise<void>) {
+    for (let i = 0; i < items.length; i += chunkSize) {
+        await fn(items.slice(i, i + chunkSize))
+    }
+}
+
+export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
+    const supabase = await createAdminClient()
+
+    try {
+        console.log(`[Action] Iniciando importación directa para ${warehouse}...`)
+
+        // 1. Obtener datos de SQL Server (Directo, sin fetch interno)
+        const rawData = await legacyService.getLegacyData('rentals', warehouse)
+        console.log(`[Action] Datos recibidos de SQL: ${rawData.length} líneas.`)
+
+        // 2. Cargar mapeos de Supabase
+        console.log('[Action] Cargando clientes de Supabase...')
+        let customers: any[] = []
+        let hasMoreCustomers = true
+        let customerOffset = 0
+        while (hasMoreCustomers) {
+            const { data, error } = await (supabase as any)
+                .from('customers')
+                .select('id, legacy_id')
+                .range(customerOffset, customerOffset + 999)
+
+            if (error) throw error
+            if (data && data.length > 0) {
+                customers = [...customers, ...data]
+                customerOffset += 1000
+                if (data.length < 1000) hasMoreCustomers = false
+            } else {
+                hasMoreCustomers = false
+            }
+        }
+        console.log(`[Action] Total clientes cargados de Supabase: ${customers.length}`)
+
+        console.log('[Action] Cargando artículos de Supabase...')
+        let articles: any[] = []
+        let hasMoreArticles = true
+        let articleOffset = 0
+        while (hasMoreArticles) {
+            const { data, error } = await (supabase as any)
+                .from('articles')
+                .select('id, legacy_id, legacy_id_sevilla, legacy_id_jerez')
+                .range(articleOffset, articleOffset + 999)
+
+            if (error) throw error
+            if (data && data.length > 0) {
+                articles = [...articles, ...data]
+                articleOffset += 1000
+                if (data.length < 1000) hasMoreArticles = false
+            } else {
+                hasMoreArticles = false
+            }
+        }
+        console.log(`[Action] Total artículos cargados de Supabase: ${articles.length}`)
+
+        const { data: warehouseData } = await (supabase as any).from('warehouses').select('id').eq('code', warehouse).single()
+        if (!warehouseData) throw new Error(`Warehouse ${warehouse} no encontrado`)
+
+        const customerMap: Record<number, string> = {}
+        customers.forEach((c: any) => customerMap[c.legacy_id] = c.id)
+
+        const articleMap: Record<number, string> = {}
+        articles.forEach((a: any) => {
+            const id = (warehouse === 'SEVILLA') ? (a.legacy_id_sevilla || a.legacy_id) : a.legacy_id_jerez
+            if (id) articleMap[id] = a.id
+        })
+
+        // 3. Transformar Cabeceras
+        console.log('[Action] Transformando cabeceras...')
+        const uniqueHeadersMap = new Map<number, any>()
+        const EXCLUDED_CUSTOMERS = [410000, 110000]
+        let skippedCustomerCount = 0
+        let excludedCustomerCount = 0
+
+        rawData.forEach((item: any) => {
+            if (!uniqueHeadersMap.has(item.ID_EVENTO)) {
+                if (EXCLUDED_CUSTOMERS.includes(item.ID_CLIENTE)) {
+                    excludedCustomerCount++
+                    return
+                }
+                const customerId = customerMap[item.ID_CLIENTE]
+                if (!customerId) {
+                    skippedCustomerCount++
+                    return
+                }
+
+                uniqueHeadersMap.set(item.ID_EVENTO, {
+                    legacy_id: item.ID_EVENTO,
+                    customer_id: customerId,
+                    warehouse_id: warehouseData.id,
+                    delivery_address: item.LUGAR_DESCRIPCION,
+                    event_date: item.FECHA_EVENTO,
+                    delivery_date: item.FECHA_ENTREGA,
+                    pickup_date: item.FECHA_RECOLECTA,
+                    status: item.STATUS || 'confirmed',
+                    notes: item.NOTAS
+                })
+            }
+        })
+
+        const rentals = Array.from(uniqueHeadersMap.values())
+        console.log(`[Action] Resultados de cabeceras:
+            - Totales en SQL: ${rawData.length}
+            - Únicos (Cabeceras): ${uniqueHeadersMap.size}
+            - Saltados (Cliente no encontrado): ${skippedCustomerCount}
+            - Excluidos (Internal/Test): ${excludedCustomerCount}
+            - Listos para Upsert: ${rentals.length}`)
+
+        // 4. Upsert Alquileres en bloques
+        await processInChunks(rentals, 500, async (chunk) => {
+            const { error } = await (supabase as any).from('rentals').upsert(chunk, { onConflict: 'legacy_id,warehouse_id' })
+            if (error) throw error
+        })
+
+        // 5. Cargar IDs de alquileres para el detalle (Paginado tmb por si acaso)
+        console.log('[Action] Cargando IDs de alquileres creados/actualizados...')
+        let createdRentals: any[] = []
+        let hasMoreCreated = true
+        let createdOffset = 0
+        while (hasMoreCreated) {
+            const { data, error } = await (supabase as any)
+                .from('rentals')
+                .select('id, legacy_id')
+                .eq('warehouse_id', warehouseData.id)
+                .range(createdOffset, createdOffset + 999)
+
+            if (error) throw error
+            if (data && data.length > 0) {
+                createdRentals = [...createdRentals, ...data]
+                createdOffset += 1000
+                if (data.length < 1000) hasMoreCreated = false
+            } else {
+                hasMoreCreated = false
+            }
+        }
+        console.log(`[Action] Mapeo de alquileres cargado: ${createdRentals.length}`)
+
+        const rentalIdMap: Record<number, string> = {}
+        createdRentals.forEach((r: any) => rentalIdMap[r.legacy_id] = r.id)
+
+        // 6. Transformar e Insertar Detalles
+        console.log('[Action] Transformando líneas de detalle...')
+        let skippedItemsCount = 0
+        const rentalItems = rawData.map((item: any) => {
+            const rentalId = rentalIdMap[item.ID_EVENTO]
+            const articleId = articleMap[item.ID_MATERIAL]
+            if (!rentalId || !articleId) {
+                skippedItemsCount++
+                return null
+            }
+            return {
+                rental_id: rentalId,
+                article_id: articleId,
+                quantity: item.CANTIDAD,
+                notes: item.NOTAS_ITEM
+            }
+        }).filter((ri: any) => ri !== null)
+
+        console.log(`[Action] Resultados de detalles:
+            - Líneas totales SQL: ${rawData.length}
+            - Líneas válidas mapeadas: ${rentalItems.length}
+            - Líneas saltadas (Art/Alq no encontrado): ${skippedItemsCount}`)
+
+        // Borrar antiguos e insertar nuevos
+        const rentalIds = Array.from(new Set(rentalItems.map((ri: any) => ri.rental_id)))
+        console.log(`[Action] Limpiando detalles antiguos para ${rentalIds.length} alquileres...`)
+        await processInChunks(rentalIds, 200, async (chunk) => {
+            await (supabase as any).from('rental_items').delete().in('rental_id', chunk)
+        })
+
+        console.log(`[Action] Insertando ${rentalItems.length} líneas de detalle en bloques de 500...`)
+        await processInChunks(rentalItems, 500, async (chunk) => {
+            const { error } = await (supabase as any).from('rental_items').insert(chunk)
+            if (error) throw error
+        })
+
+        console.log(`[Action] ¡Importación de ${warehouse} completada con éxito!`)
+        return { success: true, count: rentals.length, table: 'rentals', skippedCount: skippedCustomerCount, totalFound: rawData.length }
+
+    } catch (error: any) {
+        console.error('[Action] Error en Importación Directa:', error)
+        return { success: false, count: 0, table: 'rentals', error: error.message }
+    }
+}
+
+export async function upsertArticlesAction(articles: any[], stockRecords: any[]): Promise<ImportResult> {
+    const supabase = await createAdminClient()
+    try {
+        const { data: upsertedArticles, error: articlesError } = await (supabase as any)
+            .from('articles')
+            .upsert(articles, { onConflict: 'legacy_id' })
+            .select()
+
+        if (articlesError) throw articlesError
+
+        if (stockRecords.length > 0) {
+            const articleMap: Record<number, string> = {}
+                ; (upsertedArticles as any[])?.forEach(a => {
+                    articleMap[a.legacy_id] = a.id
+                })
+
+            const finalizedStock = stockRecords.map(s => ({
+                article_id: articleMap[s.legacy_id],
+                warehouse_id: s.warehouse_id,
+                quantity: s.quantity
+            })).filter(s => s.article_id)
+
+            if (finalizedStock.length > 0) {
+                const { error: stockError } = await (supabase as any)
+                    .from('article_stock')
+                    .upsert(finalizedStock, { onConflict: 'article_id,warehouse_id' })
+
+                if (stockError) throw stockError
+            }
+        }
+        return { success: true, count: (upsertedArticles as any[])?.length || 0, table: 'articles' }
+    } catch (error: any) {
+        return { success: false, count: 0, table: 'articles', error: error.message }
+    }
+}
+
+export async function upsertCustomersAction(customers: any[]): Promise<ImportResult> {
+    const supabase = await createAdminClient()
+    try {
+        const { data: upserted, error: dbError } = await (supabase as any)
+            .from('customers')
+            .upsert(customers, { onConflict: 'legacy_id' })
+            .select()
+        if (dbError) throw dbError
+        return { success: true, count: (upserted as any[])?.length || 0, table: 'customers' }
+    } catch (error: any) {
+        return { success: false, count: 0, table: 'customers', error: error.message }
+    }
+}
