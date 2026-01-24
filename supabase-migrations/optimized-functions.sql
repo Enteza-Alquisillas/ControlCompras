@@ -103,50 +103,33 @@ RETURNS TABLE (
   delivery_address TEXT,
   event_date DATE
 ) AS $$
-BEGIN
-  RETURN QUERY
-  WITH rental_dates AS (
-    -- Generar todas las fechas relevantes para este artículo
-    SELECT DISTINCT
-      d.reservation_date,
-      r.id as rental_id,
-      r.legacy_id as rental_legacy_id,
-      c.name as customer_name,
-      ri.quantity::BIGINT,
-      r.delivery_date,
-      r.pickup_date,
-      r.delivery_address
-    FROM rentals r
-    JOIN rental_items ri ON ri.rental_id = r.id
-    JOIN customers c ON c.id = r.customer_id
-    CROSS JOIN LATERAL (
-      -- Generar fechas solo entre delivery y pickup
-      SELECT generate_series(
-        GREATEST(r.delivery_date, start_date),
-        LEAST(r.pickup_date, end_date),
-        '1 day'::interval
-      )::date as reservation_date
-    ) d
-    WHERE ri.article_id = p_article_id
-      AND r.status != 'cancelled'
-      AND c.is_internal = false
-      AND r.delivery_date <= end_date
-      AND r.pickup_date >= start_date
-  )
-  SELECT
-    rd.reservation_date AS reservation_date,
-    rd.rental_id AS rental_id,
-    rd.rental_legacy_id AS rental_legacy_id,
-    rd.customer_name AS customer_name,
-    rd.quantity AS quantity,
-    rd.delivery_date AS delivery_date,
-    rd.pickup_date AS pickup_date,
-    rd.delivery_address AS delivery_address,
-    rd.delivery_date AS event_date
-  FROM rental_dates rd
-  ORDER BY rd.reservation_date, rd.delivery_date;
-END;
-$$ LANGUAGE plpgsql;
+  SELECT DISTINCT
+    d.reservation_date::DATE,
+    r.id,
+    r.legacy_id::BIGINT,
+    c.name,
+    ri.quantity::BIGINT,
+    r.delivery_date,
+    r.pickup_date,
+    r.delivery_address,
+    r.delivery_date
+  FROM rentals r
+  JOIN rental_items ri ON ri.rental_id = r.id
+  JOIN customers c ON c.id = r.customer_id
+  CROSS JOIN LATERAL (
+    SELECT generate_series(
+      GREATEST(r.delivery_date, start_date),
+      LEAST(r.pickup_date, end_date),
+      '1 day'::interval
+    )::date as reservation_date
+  ) d
+  WHERE ri.article_id = p_article_id
+    AND r.status != 'cancelled'
+    AND c.is_internal = false
+    AND r.delivery_date <= end_date
+    AND r.pickup_date >= start_date
+  ORDER BY d.reservation_date, r.delivery_date;
+$$ LANGUAGE SQL;
 
 -- 3. ÍNDICES ESTRATÉGICOS para mejorar rendimiento
 -- =====================================================
