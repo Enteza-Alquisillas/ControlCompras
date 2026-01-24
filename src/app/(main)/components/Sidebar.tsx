@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 
 const navigation = [
   { name: 'Disponibilidad', href: '/dashboard', icon: 'chart' },
   { name: 'Articulos', href: '/articles', icon: 'box', disabled: true },
   { name: 'Reservas', href: '/rentals', icon: 'calendar', disabled: true },
   { name: 'Clientes', href: '/customers', icon: 'users', disabled: true },
-  { name: 'Importar', href: '/import', icon: 'upload' },
+  { name: 'Importar', href: '/import', icon: 'upload', localOnly: true },
 ]
 
 function NavIcon({ icon }: { icon: string }) {
@@ -44,6 +45,16 @@ function NavIcon({ icon }: { icon: string }) {
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [showWarning, setShowWarning] = useState(false)
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  const handleLocalOnlyClick = (e: React.MouseEvent) => {
+    if (isProduction) {
+      e.preventDefault()
+      setShowWarning(true)
+      setTimeout(() => setShowWarning(false), 5000)
+    }
+  }
 
   return (
     <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
@@ -78,6 +89,22 @@ export function Sidebar() {
             )
           }
 
+          if (item.localOnly && isProduction) {
+            return (
+              <button
+                key={item.name}
+                onClick={handleLocalOnlyClick}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              >
+                <NavIcon icon={item.icon} />
+                {item.name}
+                <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                  Solo local
+                </span>
+              </button>
+            )
+          }
+
           return (
             <Link
               key={item.name}
@@ -93,6 +120,23 @@ export function Sidebar() {
           )
         })}
       </nav>
+
+      {/* Warning Toast */}
+      {showWarning && (
+        <div className="fixed bottom-4 right-4 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg shadow-lg max-w-md animate-slide-up z-50">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="font-semibold text-amber-900">Función solo disponible en local</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                La importación de datos desde SQL Server solo está disponible cuando la aplicación se ejecuta localmente, ya que requiere acceso a las bases de datos internas.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
