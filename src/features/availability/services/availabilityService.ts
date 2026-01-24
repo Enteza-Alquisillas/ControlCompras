@@ -51,10 +51,7 @@ export const availabilityService = {
 
     if (error) {
       console.error('Error fetching article reservations:', error)
-      console.error('Error details:', JSON.stringify(error, null, 2))
-      console.error('Error message:', error.message)
-      console.error('Error code:', error.code)
-      throw new Error(error.message || 'Unknown error fetching reservations')
+      throw new Error(error.message)
     }
 
     return (data as ArticleReservation[]) || []
