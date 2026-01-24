@@ -18,6 +18,14 @@ function formatDate(dateStr: string): string {
   })
 }
 
+function getWarehouse(legacyId: number | null): 'Sevilla' | 'Jerez' | '-' {
+  if (!legacyId) return '-'
+  const idStr = String(legacyId)
+  if (idStr.startsWith('41')) return 'Sevilla'
+  if (idStr.startsWith('11')) return 'Jerez'
+  return '-'
+}
+
 export function ArticleDetailModal({ breakage, onClose }: ArticleDetailModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
   const { reservations, isLoading, error } = useArticleDetail(
@@ -89,7 +97,7 @@ export function ArticleDetailModal({ breakage, onClose }: ArticleDetailModalProp
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div
         ref={modalRef}
-        className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-start">
@@ -136,6 +144,9 @@ export function ArticleDetailModal({ breakage, onClose }: ArticleDetailModalProp
               <thead>
                 <tr className="border-b border-gray-200">
                   <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase">
+                    Almacen
+                  </th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase">
                     Evento
                   </th>
                   <th className="text-left py-2 px-3 text-xs font-medium text-gray-500 uppercase">
@@ -162,6 +173,17 @@ export function ArticleDetailModal({ breakage, onClose }: ArticleDetailModalProp
                     className={`border-b border-gray-100 ${r.isOverbooked ? 'bg-red-50' : ''
                       }`}
                   >
+                    <td className="py-2 px-3 text-sm">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        getWarehouse(r.rental_legacy_id) === 'Sevilla'
+                          ? 'bg-orange-100 text-orange-700'
+                          : getWarehouse(r.rental_legacy_id) === 'Jerez'
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {getWarehouse(r.rental_legacy_id)}
+                      </span>
+                    </td>
                     <td className="py-2 px-3 text-sm">
                       <div className="flex flex-col">
                         <span className="font-medium text-gray-900">

@@ -95,6 +95,7 @@ CREATE OR REPLACE FUNCTION get_article_reservations_optimized(
 RETURNS TABLE (
   reservation_date DATE,
   rental_id UUID,
+  rental_legacy_id BIGINT,
   customer_name TEXT,
   quantity BIGINT,
   delivery_date DATE,
@@ -109,6 +110,7 @@ BEGIN
     SELECT DISTINCT
       d.reservation_date,
       r.id as rental_id,
+      r.legacy_id as rental_legacy_id,
       c.name as customer_name,
       ri.quantity::BIGINT,
       r.delivery_date,
@@ -134,6 +136,7 @@ BEGIN
   SELECT
     rd.reservation_date AS reservation_date,
     rd.rental_id AS rental_id,
+    rd.rental_legacy_id AS rental_legacy_id,
     rd.customer_name AS customer_name,
     rd.quantity AS quantity,
     rd.delivery_date AS delivery_date,

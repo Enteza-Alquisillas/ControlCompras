@@ -249,6 +249,7 @@ export type Database = {
         Returns: {
           reservation_date: string
           rental_id: string
+          rental_legacy_id: number | null
           customer_name: string
           quantity: number
           delivery_date: string
