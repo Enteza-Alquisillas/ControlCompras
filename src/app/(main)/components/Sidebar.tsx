@@ -7,7 +7,7 @@ import { useState } from 'react'
 const navigation = [
   { name: 'Disponibilidad', href: '/dashboard', icon: 'chart' },
   { name: 'Articulos', href: '/articles', icon: 'box', disabled: true },
-  { name: 'Reservas', href: '/rentals', icon: 'calendar', disabled: true },
+  { name: 'Reservas', href: '/reservations', icon: 'calendar' },
   { name: 'Clientes', href: '/customers', icon: 'users', disabled: true },
   { name: 'Importar', href: '/import', icon: 'upload', localOnly: true },
 ]
@@ -110,8 +110,8 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                 }`}
             >
               <NavIcon icon={item.icon} />
