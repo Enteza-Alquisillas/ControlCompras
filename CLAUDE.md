@@ -330,10 +330,18 @@ test('should calculate total with tax', () => {
 
 > Esta sección CRECE con cada error encontrado.
 
-### 2025-01-09: Usar npm run dev, no next dev
-- **Error**: Puerto hardcodeado causa conflictos
-- **Fix**: Siempre usar `npm run dev` (auto-detecta puerto)
-- **Aplicar en**: Todos los proyectos
+### 2026-01-26: Errores de Hidratación (Hydration Mismatch) y Caché
+- **Error**: El navegador del usuario seguía ejecutando código antiguo (`Math.random`) después de que el archivo en disco fuera actualizado, causando errores de hidratación y comportamiento errático en los indicadores.
+- **Fix**: 
+    1. Usar patrón de montaje seguro (`mounted` state) para renderizado solo en cliente de partes dinámicas.
+    2. Forzar limpieza de `.next` (caché de Turbopack/Next.js) y recarga forzada de navegador (Ctrl+F5).
+    3. Renombrar componentes internos para forzar re-compilación si la caché persiste.
+- **Aplicar en**: Cualquier componente que use lógica de fechas o aleatoriedad que sea renderizado por SSR.
+
+### 2026-01-26: Lógica de Disponibilidad vs Visualización
+- **Requerimiento**: El cálculo de stock debe ser por RANGO (delivery_date -> pickup_date), pero la interfaz de usuario debe pivotar exclusivamente sobre `event_date`.
+- **Implementación**: Consultar indicadores y filtros basándose en `event_date` para el conteo de eventos, pero usar el cálculo de rotura de stock que ya contempla los rangos completos.
+- **Aplicar en**: Vistas de calendario y resúmenes diarios.
 
 ---
 

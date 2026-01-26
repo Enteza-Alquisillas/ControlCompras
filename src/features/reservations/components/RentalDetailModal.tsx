@@ -16,11 +16,13 @@ export function RentalDetailModal() {
     useEffect(() => {
         if (isDetailModalOpen && selectedRentalId) {
             async function loadData() {
+                const id = selectedRentalId
+                if (!id) return
                 setLoading(true)
                 try {
                     const [rentalData, itemsData] = await Promise.all([
-                        reservationsService.getRentalDetail(selectedRentalId),
-                        reservationsService.getRentalItems(selectedRentalId)
+                        reservationsService.getRentalDetail(id),
+                        reservationsService.getRentalItems(id)
                     ])
                     setRental(rentalData)
                     setItems(itemsData)

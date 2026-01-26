@@ -1,17 +1,17 @@
-# Estado del Proyecto: Sistema de Gestion de Alquileres (Machu)
+# Estado del Proyecto: Enteza Reservas App (Machu)
 
-> Ultima actualizacion: 2026-01-23
+> Ultima actualizacion: 2026-01-26
 > Lee este archivo al inicio de cada sesion para retomar el contexto.
 
 ---
 
 ## 1. Resumen Ejecutivo
 
-**Aplicacion:** Sistema de gestion de alquiler de material para eventos (sillas, mesas, manteles, vajilla).
+**Aplicacion:** Enteza Reservas App - Sistema de gestion de alquiler de material para eventos.
 
-**Problema principal:** Calcular disponibilidad real de articulos para fechas futuras, detectando sobreventas antes de que ocurran.
+**Problema principal:** Calcular disponibilidad real de articulos y gestionar el flujo de reservas centrado en la fecha del evento.
 
-**Estado actual:** MVP Fase 1 parcialmente completado - Feature de Disponibilidad funcionando.
+**Estado actual:** MVP Fase 2 Completada - Feature de Reservas (Calendario V3.1 + Dashboard de Disponibilidad) funcional y desplegada en Vercel.
 
 ---
 
@@ -22,15 +22,15 @@
 | Tabla | Estado | Descripcion |
 |-------|--------|-------------|
 | `warehouses` | OK | 2 almacenes (Sevilla, Jerez) |
-| `articles` | OK | 10 articulos de ejemplo |
+| `articles` | OK | Gestión de inventario |
 | `article_stock` | OK | Stock por almacen |
-| `customers` | OK | 9 clientes (7 externos + 2 internos para prestamos) |
-| `rentals` | OK | 8 reservas de ejemplo |
-| `rental_items` | OK | Lineas de reserva con sobreventa |
+| `customers` | OK | Base de datos de clientes |
+| `rentals` | OK | Maestro de reservas (pivot: `event_date`) |
+| `rental_items` | OK | Detalle de artículos por reserva |
 
 **Funciones SQL:**
-- `get_stock_breakages(start_date, end_date)` - Calcula roturas de stock
-- `get_article_reservations(article_id, start_date, end_date)` - Detalle por articulo
+- `get_stock_breakages_optimized(start_date, end_date)` - Calcula roturas considerando rangos (delivery->pickup)
+- `get_article_reservations_optimized(article_id, start_date, end_date)` - Detalle por articulo
 
 **RLS:** Habilitado en todas las tablas. Acceso para `authenticated` y `anon` (lectura).
 
@@ -54,6 +54,22 @@ src/features/availability/
 └── index.ts                     # Exports publicos
 ```
 
+**Feature Reservations (NUEVO):**
+```
+src/features/reservations/
+├── components/
+│   ├── BookingCalendar.tsx      # Calendario V3.1 con indicadores (V/Am/R)
+│   ├── DailyAvailabilityTable.tsx # Roturas para el día seleccionado
+│   ├── DailyRentalsTable.tsx    # Eventos programados el día seleccionado
+│   └── RentalDetailModal.tsx    # Ficha completa del evento (cabecera + items)
+├── store/
+│   └── useReservationsStore.ts  # Estado global de fecha seleccionada
+├── services/
+│   └── reservationsService.ts   # Lógica centada en event_date
+└── types/
+    └── index.ts                 # Tipos compartidos
+```
+
 **Layout y Navegacion:**
 - `src/app/(main)/layout.tsx` - Layout con sidebar
 - `src/app/(main)/components/Sidebar.tsx` - Navegacion (client component)
@@ -61,6 +77,10 @@ src/features/availability/
 
 **Tipos Supabase:**
 - `src/lib/supabase/database.types.ts` - Tipos generados
+
+**Marca e Identidad:**
+- Título: "Enteza Reservas App"
+- Idioma: Español (ES)
 
 ### Datos de Prueba
 
@@ -78,43 +98,23 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 | Feature | Estado | Descripcion |
 |---------|--------|-------------|
 | Auth | PENDIENTE | Login/Logout con Supabase Email/Password |
-| Import | PENDIENTE | Importar articulos, stock y reservas desde CSV/Excel |
-| Filtros | PENDIENTE | Filtrar roturas por rango de fechas |
-| Stats Cards | PENDIENTE | Mostrar contadores reales en el dashboard |
+| Import | PENDIENTE | Importar articulos, stock y reservas (Maestros) |
+| Filtros | PENDIENTE | Búsqueda por artículo en tabla de disponibilidad |
 
-### Fase 2: Gestion de Reservas
-
-| Feature | Estado | Descripcion |
-|---------|--------|-------------|
-| Customers CRUD | PENDIENTE | Crear/editar/listar clientes |
-| Rentals CRUD | PENDIENTE | Crear/editar reservas con calculo en tiempo real |
-| Alerts | PENDIENTE | Notificaciones de sobreventa |
-
-### Fase 3: Operaciones
+### Fase 2: Gestión de Operaciones
 
 | Feature | Estado | Descripcion |
 |---------|--------|-------------|
-| Delivery Notes | PENDIENTE | Albaranes de entrega |
-| Pickup Notes | PENDIENTE | Albaranes de recogida |
-| Invoicing | PENDIENTE | Facturacion |
+| Customers CRUD | PENDIENTE | Gestión de clientes |
+| Rentals CRUD | PENDIENTE | Pantalla de Nueva Reserva / Edición |
+| Delivery Notes | PENDIENTE | Formatos de impresión de albaranes |
 
 ---
 
-## 4. Decisiones Tecnicas Tomadas
+## 4. Decisiones Tecnicas Clave
 
-### Arquitectura
-- **Feature-First:** Todo el codigo de una feature en una carpeta
-- **Client Components:** Componentes con interactividad usan 'use client'
-- **Server Components:** Layout principal es server component
-
-### Supabase
-- **RLS habilitado** en todas las tablas
-- **Funciones SQL** para calculos complejos (mejor performance)
-- **Acceso anon** habilitado para demo (en produccion: solo authenticated)
-
-### Tailwind CSS
-- Version 3.4 con sintaxis clasica (`@tailwind base/components/utilities`)
-- NO usar `@import 'tailwindcss'` (es sintaxis v4)
+- **Fisica vs Visual:** El stock se compromete por el rango total de fechas (entrega-recogida), pero la UI filtra y cuenta eventos solo por la `event_date`.
+- **Calendario V3.1:** Implementado con `BookingCalendar.tsx` para evitar conflictos de caché y renderizado seguro en cliente (`mounted` state) para eliminar Hydration Errors.
 
 ---
 
