@@ -53,6 +53,7 @@ export type Database = {
           code: string | null
           created_at: string | null
           description: string
+          family: string | null
           id: string
           is_active: boolean | null
           legacy_id: number | null
@@ -61,6 +62,7 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           description: string
+          family?: string | null
           id?: string
           is_active?: boolean | null
           legacy_id?: number | null
@@ -69,6 +71,7 @@ export type Database = {
           code?: string | null
           created_at?: string | null
           description?: string
+          family?: string | null
           id?: string
           is_active?: boolean | null
           legacy_id?: number | null

@@ -314,6 +314,26 @@ test('should calculate total with tax', () => {
 - **Solución Propuesta**: Uso de Cloudflare Tunnel, ngrok o proxy intermedio.
 - **Aplicar en**: Despliegues cloud que dependen de recursos on-premise.
 
+### 2026-01-31: Optimización de Rendimiento en Consultas SQL Complejas
+- **Error**: Al intentar filtrar por `event_date` de forma específica por artículo mediante JOINs anidados, la base de datos sufrió un timeout.
+- **Fix**: Usar una estrategia de "Cálculo Masivo + Mapeo Final". Primero se calculan todos los compromisos diarios de forma eficiente y luego se hace un JOIN final contra un CTE que solo contenga los días de evento por artículo.
+- **Aplicar en**: Cualquier reporte de disponibilidad que requiera filtros dinámicos sobre cálculos agregados.
+
+### 2026-01-31: Patrón de "Fecha Maestra" (Master Date)
+- **Error**: La presentación de roturas para todos los días de ocupación (entrega/evento/recogida) creaba ruido visual (3 filas por alerta).
+- **Fix**: Utilizar `COALESCE(event_date, delivery_date)` como ancla de reporte, mientras el cálculo de fondo sigue usando el rango completo.
+- **Aplicar en**: UIs de disponibilidad y gestión de stock para evitar redundancia.
+
+### 2026-01-31: Error `fetch failed` en WSL/Windows Networking
+- **Error**: Las llamadas `fetch` desde el cliente a rutas de API fallan o dan timeout en entornos WSL2 al sincronizar datos pesados.
+- **Fix**: Migrar lógica a **Server Actions**. Elimina problemas de red del navegador y permite ejecuciones más largas y seguras en el servidor.
+- **Aplicar en**: Sincronizaciones masivas y procesos que requieran acceso a DBs internas.
+
+### 2026-01-31: Resolución DNS en WSL
+- **Error**: El backend en WSL pierde conectividad con recursos como Supabase por fallos de DNS (`Temporary failure in name resolution`).
+- **Fix**: Configurar manualment `/etc/resolv.conf` con un servidor DNS robusto (ej. 8.8.8.8).
+- **Aplicar en**: Cualquier entorno de desarrollo local sobre WSL.
+
 ---
 
 *Este archivo es el cerebro de la fábrica. Cada error documentado la hace más fuerte.*

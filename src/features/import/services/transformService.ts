@@ -16,6 +16,7 @@ export const transformService = {
                 legacy_id: effectiveLegacyId,
                 code: `ART-${effectiveLegacyId}`,
                 description: item.DESCRIPCION,
+                family: item.CLASIFICACION,
                 is_active: true,
                 legacy_id_sevilla: item.ID_MATERIAL_SEVILLA || (warehouse === 'SEVILLA' ? item.ID_MATERIAL : null),
                 legacy_id_jerez: item.ID_MATERIAL_JEREZ || (warehouse === 'JEREZ' ? item.ID_MATERIAL : null)

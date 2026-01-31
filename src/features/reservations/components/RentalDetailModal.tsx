@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { useReservationsStore } from '../store/useReservationsStore'
 import { reservationsService } from '../services/reservationsService'
 import { RentalItemWithArticle, RentalWithCustomer } from '../types'
@@ -103,44 +103,65 @@ export function RentalDetailModal() {
                                 </div>
                             )}
 
-                            {/* Articles List */}
-                            <div className="px-6 py-4 bg-gray-100/50">
-                                <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest">Lista de Artículos</h3>
-                            </div>
-
                             <div className="px-6 pb-6 mt-4">
                                 {items.length === 0 ? (
                                     <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
                                         <p className="text-gray-500 italic">No hay artículos registrados para este folio.</p>
                                     </div>
                                 ) : (
-                                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                                        <table className="w-full text-sm">
-                                            <thead className="bg-gray-100 border-b border-gray-200">
+                                    <div className="border border-gray-300 rounded overflow-hidden bg-white shadow-sm">
+                                        <table className="w-full text-xs border-collapse">
+                                            <thead className="bg-[#E5E7EB] text-gray-700 font-bold border-b border-gray-400">
                                                 <tr>
-                                                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Articulo</th>
-                                                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Código</th>
-                                                    <th className="px-4 py-3 text-center font-semibold text-gray-700 w-24">Cantidad</th>
-                                                    <th className="px-4 py-3 text-left font-semibold text-gray-700">Notas</th>
+                                                    <th className="border-r border-gray-300 px-2 py-1.5 text-left">ARTICULO</th>
+                                                    <th className="border-r border-gray-300 px-2 py-1.5 text-left w-24">CÓDIGO</th>
+                                                    <th className="border-r border-gray-300 px-2 py-1.5 text-center w-20">CANTIDAD</th>
+                                                    <th className="px-2 py-1.5 text-left">NOTAS</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {items.map((item) => (
-                                                    <tr key={item.id} className="hover:bg-blue-50 transition-colors">
-                                                        <td className="px-4 py-3 font-medium text-gray-900">
-                                                            {item.article?.description || 'Artículo Desconocido'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                                                            {item.article?.code || 'N/A'}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-center font-bold text-blue-800 bg-blue-50/50">
-                                                            {item.quantity}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-gray-500 italic text-xs">
-                                                            {item.notes || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                            <tbody className="divide-y divide-gray-200">
+                                                {(() => {
+                                                    // Group items by family
+                                                    const groups: Record<string, RentalItemWithArticle[]> = {}
+                                                    items.forEach(item => {
+                                                        const family = item.article?.family || 'SIN FAMILIA'
+                                                        if (!groups[family]) groups[family] = []
+                                                        groups[family].push(item)
+                                                    })
+
+                                                    // Sort families alphabetically
+                                                    const sortedFamilies = Object.keys(groups).sort()
+
+                                                    return sortedFamilies.map(family => (
+                                                        <Fragment key={family}>
+                                                            {/* Family Header Row */}
+                                                            <tr className="bg-blue-50/30">
+                                                                <td colSpan={4} className="px-2 py-1.5 text-[10px] font-black text-blue-900/40 uppercase tracking-widest border-b border-blue-100">
+                                                                    {family}
+                                                                </td>
+                                                            </tr>
+                                                            {/* Items in this family */}
+                                                            {groups[family]
+                                                                .sort((a, b) => (a.article?.description || '').localeCompare(b.article?.description || ''))
+                                                                .map((item) => (
+                                                                    <tr key={item.id} className="hover:bg-blue-50 transition-colors even:bg-gray-50/50">
+                                                                        <td className="border-r border-gray-200 px-2 py-1 font-medium text-gray-900">
+                                                                            {item.article?.description || 'Artículo Desconocido'}
+                                                                        </td>
+                                                                        <td className="border-r border-gray-200 px-2 py-1 text-gray-600 font-mono">
+                                                                            {item.article?.code || 'N/A'}
+                                                                        </td>
+                                                                        <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-blue-700">
+                                                                            {item.quantity}
+                                                                        </td>
+                                                                        <td className="px-2 py-1 text-gray-500 italic">
+                                                                            {item.notes || '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                        </Fragment>
+                                                    ))
+                                                })()}
                                             </tbody>
                                         </table>
                                     </div>

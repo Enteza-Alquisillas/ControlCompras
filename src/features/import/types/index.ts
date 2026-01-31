@@ -1,6 +1,7 @@
 export interface ArticleLegacy {
     ID_MATERIAL: number
     DESCRIPCION: string
+    CLASIFICACION: string | null
     EXISTENCIA: number
     ID_MATERIAL_SEVILLA?: number | null
     ID_MATERIAL_JEREZ?: number | null

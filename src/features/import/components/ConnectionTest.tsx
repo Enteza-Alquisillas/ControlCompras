@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { testConnectionAction } from '../actions/importActions'
 
 export function ConnectionTest() {
     const [status, setStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({
@@ -17,13 +18,7 @@ export function ConnectionTest() {
         setErrors(prev => ({ ...prev, [warehouse]: null }))
 
         try {
-            const response = await fetch('/api/import/legacy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ table: 'test', warehouse }),
-            })
-
-            const data = await response.json()
+            const data = await testConnectionAction(warehouse)
 
             if (data.success) {
                 setStatus(prev => ({ ...prev, [warehouse]: 'success' }))

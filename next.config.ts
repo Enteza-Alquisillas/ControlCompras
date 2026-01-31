@@ -5,7 +5,12 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
-  },
+    turbopack: {
+      watchOptions: {
+        poll: 1000,
+      },
+    },
+  } as any,
 }
 
 export default nextConfig

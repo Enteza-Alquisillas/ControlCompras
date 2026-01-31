@@ -10,7 +10,7 @@ export interface RentalWithCustomer extends Rental {
 }
 
 export interface RentalItemWithArticle extends RentalItem {
-    article: Pick<Article, 'code' | 'description'> | null
+    article: Pick<Article, 'code' | 'description' | 'family'> | null
 }
 
 export interface ReservationState {

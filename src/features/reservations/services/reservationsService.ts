@@ -31,7 +31,7 @@ export const reservationsService = {
 
         const { data, error } = await supabase
             .from('rental_items')
-            .select('*, article:articles(code, description)')
+            .select('*, article:articles(code, description, family)')
             .eq('rental_id', rentalId)
 
         if (error) {

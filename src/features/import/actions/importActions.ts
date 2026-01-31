@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { ImportResult } from '../types'
 import { legacyService } from '../services/legacyService'
+import { transformService } from '../services/transformService'
 
 /**
  * Helper to process array in chunks
@@ -12,6 +13,41 @@ async function processInChunks<T>(items: T[], chunkSize: number, fn: (chunk: T[]
         await fn(items.slice(i, i + chunkSize))
     }
 }
+
+export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
+    const supabase = await createAdminClient()
+    try {
+        console.log(`[Action] Importando artículos para ${warehouse}...`)
+        const rawData = await legacyService.getLegacyData('articles', warehouse)
+        const transformedArticles = transformService.transformArticles(rawData, warehouse)
+
+        const { data: warehouseData } = await (supabase as any)
+            .from('warehouses')
+            .select('id, code')
+            .eq('code', warehouse)
+            .single()
+
+        if (!warehouseData) throw new Error(`Warehouse ${warehouse} no encontrado`)
+
+        const stockRecords = rawData.map((item: any) => {
+            const effectiveLegacyId = (warehouse === 'JEREZ' && item.ID_MATERIAL_SEVILLA)
+                ? item.ID_MATERIAL_SEVILLA
+                : item.ID_MATERIAL
+
+            return {
+                legacy_id: effectiveLegacyId,
+                warehouse_id: warehouseData.id,
+                quantity: item.EXISTENCIA,
+            }
+        }).filter((s: any) => s.quantity > 0)
+
+        return await upsertArticlesAction(transformedArticles, stockRecords)
+    } catch (error: any) {
+        console.error('[Action] Error en Importación de Artículos:', error)
+        return { success: false, count: 0, table: 'articles', error: error.message }
+    }
+}
+
 
 export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
     const supabase = await createAdminClient()
@@ -193,6 +229,29 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
     } catch (error: any) {
         console.error('[Action] Error en Importación Directa:', error)
         return { success: false, count: 0, table: 'rentals', error: error.message }
+    }
+}
+
+export async function importCustomersAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
+    try {
+        console.log(`[Action] Importando clientes para ${warehouse}...`)
+        const rawData = await legacyService.getLegacyData('customers', warehouse)
+        const transformedCustomers = transformService.transformCustomers(rawData)
+        return await upsertCustomersAction(transformedCustomers)
+    } catch (error: any) {
+        console.error('[Action] Error en Importación de Clientes:', error)
+        return { success: false, count: 0, table: 'customers', error: error.message }
+    }
+}
+
+export async function testConnectionAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
+    try {
+        console.log(`[Action] Probando conexión para ${warehouse}...`)
+        await legacyService.getLegacyData('test', warehouse)
+        return { success: true, count: 0, table: 'test' }
+    } catch (error: any) {
+        console.error('[Action] Error en Test de Conexión:', error)
+        return { success: false, count: 0, table: 'test', error: error.message }
     }
 }
 

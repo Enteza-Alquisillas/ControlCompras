@@ -40,6 +40,7 @@ export const legacyService = {
               SELECT 
                 ID_MATERIAL,
                 DESCRIPCION,
+                CLASIFICACION,
                 EXISTENCIA,
                 ${mappingField}
               FROM dbo.ARTICULO_ALQUILER
@@ -75,6 +76,9 @@ export const legacyService = {
             WHERE e.FECHA_EVENTO >= DATEADD(month, -3, GETDATE())
           `
                     break
+                case 'test':
+                    query = 'SELECT 1 as connected'
+                    break;
                 default:
                     throw new Error('Tabla inválida')
             }

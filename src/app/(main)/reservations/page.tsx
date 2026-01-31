@@ -16,24 +16,26 @@ export default function ReservationsPage() {
             {/* Top Section */}
             <div className="flex flex-col lg:flex-row gap-6 items-stretch">
                 {/* Calendar Area */}
-                <div className="flex flex-col gap-2">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider px-1">Calendario Mensual</h3>
-                    <BookingCalendar />
-                    <div className="mt-auto bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                        <p className="text-xs text-blue-800 font-bold uppercase tracking-tighter">Fecha Seleccionada</p>
-                        <p className="text-lg font-black text-blue-900 leading-tight">
+                <div className="flex flex-col gap-2 shrink-0">
+                    <div className="flex items-baseline gap-3 px-1 h-10">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Calendario Mensual</h3>
+                        <span className="text-xl font-black text-blue-900">
                             {format(selectedDate, "dd 'de' MMMM", { locale: es })}
-                        </p>
-                        <p className="text-xs text-blue-600 font-medium">
-                            {format(selectedDate, "yyyy")}
-                        </p>
+                        </span>
                     </div>
+                    <BookingCalendar />
                 </div>
 
                 {/* Daily Availability Area */}
-                <div className="flex-1 flex flex-col gap-2">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider px-1">Artículos con Sobreventa</h3>
-                    <DailyAvailabilityTable />
+                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                    <div className="h-10 flex items-center px-1">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                            Artículos con Sobreventa
+                        </h3>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                        <DailyAvailabilityTable />
+                    </div>
                 </div>
             </div>
 
