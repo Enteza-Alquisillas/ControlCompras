@@ -5,6 +5,9 @@ import { ImportResult } from '../types'
 import { legacyService } from '../services/legacyService'
 import { transformService } from '../services/transformService'
 
+// Clientes internos a excluir (Sevilla-Jerez, Jerez-Sevilla, etc.)
+const EXCLUDED_CUSTOMERS = [410000, 110000]
+
 /**
  * Helper to process array in chunks
  */
@@ -117,7 +120,6 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
         // 3. Transformar Cabeceras
         console.log('[Action] Transformando cabeceras...')
         const uniqueHeadersMap = new Map<number, any>()
-        const EXCLUDED_CUSTOMERS = [410000, 110000]
         let skippedCustomerCount = 0
         let excludedCustomerCount = 0
 
@@ -236,7 +238,11 @@ export async function importCustomersAction(warehouse: 'SEVILLA' | 'JEREZ'): Pro
     try {
         console.log(`[Action] Importando clientes para ${warehouse}...`)
         const rawData = await legacyService.getLegacyData('customers', warehouse)
-        const transformedCustomers = transformService.transformCustomers(rawData)
+
+        // Filtrar clientes excluidos
+        const filteredData = rawData.filter((c: any) => !EXCLUDED_CUSTOMERS.includes(c.ID_CLIENTE))
+
+        const transformedCustomers = transformService.transformCustomers(filteredData)
         return await upsertCustomersAction(transformedCustomers)
     } catch (error: any) {
         console.error('[Action] Error en Importación de Clientes:', error)

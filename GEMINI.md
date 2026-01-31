@@ -299,6 +299,11 @@ test('should calculate total with tax', () => {
 
 > Esta sección CRECE con cada error encontrado.
 
+### 2025-01-31: Sincronización Upsert vs Registros Huérfanos
+- **Error**: Al aplicar nuevos filtros de exclusión en una sincronización basada en `upsert`, los registros antiguos que ya estaban en la base de datos no se eliminan automáticamente (quedan "huérfanos").
+- **Fix**: Realizar una limpieza manual vía SQL después de modificar los filtros de importación para asegurar la consistencia.
+- **Aplicar en**: Cualquier proceso de importación que pase de "importar todo" a "importar con filtros".
+
 ### 2025-01-09: Usar npm run dev, no next dev
 - **Error**: Puerto hardcodeado causa conflictos
 - **Fix**: Siempre usar `npm run dev` (auto-detecta puerto)
