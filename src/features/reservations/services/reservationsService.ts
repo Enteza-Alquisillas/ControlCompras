@@ -10,7 +10,7 @@ export const reservationsService = {
 
         const { data, error } = await supabase
             .from('rentals')
-            .select('*, customer:customers(name)')
+            .select('*, customer:customers(name), items:rental_items(article_id)')
             .eq('event_date', date) // Filtrado principal por event_date
             .neq('status', 'cancelled')
             .order('created_at', { ascending: false })

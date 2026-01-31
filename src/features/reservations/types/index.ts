@@ -7,6 +7,7 @@ export type Article = Database['public']['Tables']['articles']['Row']
 
 export interface RentalWithCustomer extends Rental {
     customer: Pick<Customer, 'name'> | null
+    items?: { article_id: string }[]
 }
 
 export interface RentalItemWithArticle extends RentalItem {
@@ -16,8 +17,10 @@ export interface RentalItemWithArticle extends RentalItem {
 export interface ReservationState {
     selectedDate: Date
     selectedRentalId: string | null
+    selectedArticleId: string | null
     isDetailModalOpen: boolean
     setSelectedDate: (date: Date) => void
     setSelectedRentalId: (id: string | null) => void
+    setSelectedArticleId: (id: string | null) => void
     setDetailModalOpen: (isOpen: boolean) => void
 }

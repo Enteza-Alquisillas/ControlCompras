@@ -7,7 +7,7 @@ import { RentalWithCustomer } from '../types'
 import { format } from 'date-fns'
 
 export function DailyRentalsTable() {
-    const { selectedDate, setSelectedRentalId, setDetailModalOpen } = useReservationsStore()
+    const { selectedDate, setSelectedRentalId, setDetailModalOpen, selectedArticleId } = useReservationsStore()
     const [rentals, setRentals] = useState<RentalWithCustomer[]>([])
     const [loading, setLoading] = useState(false)
 
@@ -52,30 +52,42 @@ export function DailyRentalsTable() {
                         ) : rentals.length === 0 ? (
                             <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
                         ) : (
-                            rentals.map((r) => (
-                                <tr
-                                    key={r.id}
-                                    onClick={() => handleRowClick(r.id)}
-                                    className="hover:bg-blue-50 cursor-pointer even:bg-gray-50 transition-colors group"
-                                >
-                                    <td className="border-r border-gray-200 px-2 py-1 font-mono text-blue-700 group-hover:font-bold">
-                                        {r.legacy_id || r.id.slice(0, 5)}
-                                    </td>
-                                    <td className="border-r border-gray-200 px-2 py-1 font-medium">{r.customer?.name || 'S/N'}</td>
-                                    <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-green-700">
-                                        {r.delivery_date ? format(new Date(r.delivery_date), 'dd/MM') : '-'}
-                                    </td>
-                                    <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-red-700">
-                                        {r.pickup_date ? format(new Date(r.pickup_date), 'dd/MM') : '-'}
-                                    </td>
-                                    <td className="border-r border-gray-200 px-2 py-1 truncate max-w-[200px]" title={r.delivery_address || ''}>
-                                        {r.delivery_address || 'N/A'}
-                                    </td>
-                                    <td className="px-2 py-1 italic text-gray-500 truncate max-w-[300px]" title={r.notes || ''}>
-                                        {r.notes || '-'}
-                                    </td>
-                                </tr>
-                            ))
+                            rentals.map((r) => {
+                                const containsSelectedArticle = selectedArticleId && r.items?.some(item => item.article_id === selectedArticleId);
+
+                                return (
+                                    <tr
+                                        key={r.id}
+                                        onClick={() => handleRowClick(r.id)}
+                                        className={`
+                                            hover:bg-blue-50 cursor-pointer even:bg-gray-50 transition-colors group
+                                            ${containsSelectedArticle ? 'bg-red-50' : ''}
+                                        `}
+                                    >
+                                        <td className="border-r border-gray-200 px-2 py-1 font-mono text-blue-700 group-hover:font-bold">
+                                            {r.legacy_id || r.id.slice(0, 5)}
+                                        </td>
+                                        <td className={`
+                                            border-r border-gray-200 px-2 py-1 font-medium
+                                            ${containsSelectedArticle ? 'text-red-600 font-bold underline' : ''}
+                                        `}>
+                                            {r.customer?.name || 'S/N'}
+                                        </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-green-700">
+                                            {r.delivery_date ? format(new Date(r.delivery_date), 'dd/MM') : '-'}
+                                        </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-red-700">
+                                            {r.pickup_date ? format(new Date(r.pickup_date), 'dd/MM') : '-'}
+                                        </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 truncate max-w-[200px]" title={r.delivery_address || ''}>
+                                            {r.delivery_address || 'N/A'}
+                                        </td>
+                                        <td className="px-2 py-1 italic text-gray-500 truncate max-w-[300px]" title={r.notes || ''}>
+                                            {r.notes || '-'}
+                                        </td>
+                                    </tr>
+                                );
+                            })
                         )}
                     </tbody>
                 </table>

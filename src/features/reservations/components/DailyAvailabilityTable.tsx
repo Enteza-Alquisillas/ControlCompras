@@ -7,7 +7,7 @@ import { StockBreakage } from '@/features/availability/types'
 import { format } from 'date-fns'
 
 export function DailyAvailabilityTable() {
-    const { selectedDate } = useReservationsStore()
+    const { selectedDate, selectedArticleId, setSelectedArticleId } = useReservationsStore()
     const [breakages, setBreakages] = useState<StockBreakage[]>([])
     const [loading, setLoading] = useState(false)
 
@@ -51,9 +51,16 @@ export function DailyAvailabilityTable() {
                             <tr><td colSpan={5} className="p-4 text-center text-green-600 font-medium italic">Sin sobreventa para este día</td></tr>
                         ) : (
                             breakages.map((b) => (
-                                <tr key={b.article_id} className="hover:bg-blue-50 even:bg-gray-50">
-                                    <td className="border border-gray-200 px-2 py-1">{b.article_description}</td>
-                                    <td className="border border-gray-200 px-2 py-1 text-gray-500">GENERAL</td>
+                                <tr
+                                    key={b.article_id}
+                                    onClick={() => setSelectedArticleId(b.article_id)}
+                                    className={`
+                                        cursor-pointer transition-colors
+                                        ${selectedArticleId === b.article_id ? 'bg-yellow-100 ring-2 ring-inset ring-yellow-400' : 'hover:bg-blue-50 even:bg-gray-50'}
+                                    `}
+                                >
+                                    <td className="border border-gray-200 px-2 py-1 font-medium">{b.article_description}</td>
+                                    <td className="border border-gray-200 px-2 py-1 text-gray-500 italic">AUTOMATICO</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right font-bold text-blue-800">{b.committed}</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right text-gray-600">{b.total_stock}</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right font-bold text-red-600">

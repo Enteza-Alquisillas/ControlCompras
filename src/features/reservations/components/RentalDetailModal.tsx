@@ -11,6 +11,7 @@ export function RentalDetailModal() {
     const { selectedRentalId, isDetailModalOpen, setDetailModalOpen } = useReservationsStore()
     const [rental, setRental] = useState<RentalWithCustomer | null>(null)
     const [items, setItems] = useState<RentalItemWithArticle[]>([])
+    const [searchTerm, setSearchTerm] = useState('')
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
@@ -19,6 +20,7 @@ export function RentalDetailModal() {
                 const id = selectedRentalId
                 if (!id) return
                 setLoading(true)
+                setSearchTerm('') // Reset search when opening new modal
                 try {
                     const [rentalData, itemsData] = await Promise.all([
                         reservationsService.getRentalDetail(id),
@@ -40,9 +42,17 @@ export function RentalDetailModal() {
 
     if (!isDetailModalOpen) return null
 
+    // Filter items based on search term
+    const filteredItems = items.filter(item => {
+        const description = (item.article?.description || '').toLowerCase()
+        const code = (item.article?.code || '').toLowerCase()
+        const search = searchTerm.toLowerCase()
+        return description.includes(search) || code.includes(search)
+    })
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col h-[85vh] overflow-hidden animate-in fade-in zoom-in duration-200">
                 {/* Header */}
                 <div className="bg-[#1A3A8A] px-6 py-4 flex justify-between items-center">
                     <h2 className="text-white font-bold text-lg uppercase tracking-wider">Detalle del Evento</h2>
@@ -113,7 +123,23 @@ export function RentalDetailModal() {
                                         <table className="w-full text-xs border-collapse">
                                             <thead className="bg-[#E5E7EB] text-gray-700 font-bold border-b border-gray-400">
                                                 <tr>
-                                                    <th className="border-r border-gray-300 px-2 py-1.5 text-left">ARTICULO</th>
+                                                    <th className="border-r border-gray-300 px-2 py-1.5 text-left bg-gray-200">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] uppercase tracking-tighter text-gray-600">Artículo</span>
+                                                            <div className="relative group">
+                                                                <input
+                                                                    type="text"
+                                                                    value={searchTerm}
+                                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                                    placeholder="Filtrar artículos..."
+                                                                    className="w-full pl-7 pr-2 py-1 text-xs font-normal border border-gray-300 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                                                                />
+                                                                <svg className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                    </th>
                                                     <th className="border-r border-gray-300 px-2 py-1.5 text-left w-24">CÓDIGO</th>
                                                     <th className="border-r border-gray-300 px-2 py-1.5 text-center w-20">CANTIDAD</th>
                                                     <th className="px-2 py-1.5 text-left">NOTAS</th>
@@ -123,7 +149,7 @@ export function RentalDetailModal() {
                                                 {(() => {
                                                     // Group items by family
                                                     const groups: Record<string, RentalItemWithArticle[]> = {}
-                                                    items.forEach(item => {
+                                                    filteredItems.forEach(item => {
                                                         const family = item.article?.family || 'SIN FAMILIA'
                                                         if (!groups[family]) groups[family] = []
                                                         groups[family].push(item)
@@ -131,6 +157,16 @@ export function RentalDetailModal() {
 
                                                     // Sort families alphabetically
                                                     const sortedFamilies = Object.keys(groups).sort()
+
+                                                    if (filteredItems.length === 0) {
+                                                        return (
+                                                            <tr>
+                                                                <td colSpan={4} className="p-8 text-center text-gray-400 italic">
+                                                                    No se encontraron artículos que coincidan con "{searchTerm}"
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    }
 
                                                     return sortedFamilies.map(family => (
                                                         <Fragment key={family}>
