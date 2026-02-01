@@ -20,16 +20,15 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         setIsLoading(true)
 
         try {
-            const { createClient } = await import('@/lib/supabase/client')
-            const supabase = createClient()
+            const { loginAction } = await import('../actions/authActions')
+            const formData = new FormData()
+            formData.append('email', email)
+            formData.append('password', password)
 
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            })
+            const result = await loginAction(formData)
 
-            if (signInError) {
-                setError(signInError.message)
+            if (result.error) {
+                setError(result.error)
                 return
             }
 

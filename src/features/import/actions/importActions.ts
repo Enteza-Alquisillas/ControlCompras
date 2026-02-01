@@ -44,7 +44,36 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
             }
         }).filter((s: any) => s.quantity > 0)
 
-        return await upsertArticlesAction(transformedArticles, stockRecords)
+        // Obtener artículos existentes para mapeo de stock
+        let existingArticles: any[] = []
+        let hasMore = true
+        let offset = 0
+        while (hasMore) {
+            const { data, error } = await (supabase as any)
+                .from('articles')
+                .select('id, legacy_id')
+                .range(offset, offset + 999)
+            if (error) throw error
+            if (data && data.length > 0) {
+                existingArticles = [...existingArticles, ...data]
+                offset += 1000
+                if (data.length < 1000) hasMore = false
+            } else {
+                hasMore = false
+            }
+        }
+
+        const articleMap: Record<number, string> = {}
+        existingArticles.forEach(a => articleMap[a.legacy_id] = a.id)
+
+        // Combinar con los recién transformados (por si hay nuevos)
+        transformedArticles.forEach((a: any) => {
+            // Nota: El ID real de Supabase no se sabe hasta el upsert para los NUEVOS,
+            // pero el upsert de articles ya maneja el onConflict.
+        })
+
+        const upsertResult = await upsertArticlesAction(transformedArticles, stockRecords)
+        return upsertResult
     } catch (error: any) {
         console.error('[Action] Error en Importación de Artículos:', error)
         return { success: false, count: 0, table: 'articles', error: error.message }

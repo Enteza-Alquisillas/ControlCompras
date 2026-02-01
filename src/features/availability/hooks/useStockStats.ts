@@ -17,7 +17,12 @@ interface UseStockStatsReturn {
   refresh: () => Promise<void>
 }
 
-export function useStockStats(): UseStockStatsReturn {
+interface UseStockStatsProps {
+  startDate?: string
+  endDate?: string
+}
+
+export function useStockStats(props?: UseStockStatsProps): UseStockStatsReturn {
   const [stats, setStats] = useState<StockStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +34,7 @@ export function useStockStats(): UseStockStatsReturn {
     try {
       const supabase = createClient()
 
-      // 1. Total active articles
+      // 1. Total active articles (cached count is fine here)
       const { count: totalArticles, error: articlesError } = await supabase
         .from('articles')
         .select('*', { count: 'exact', head: true })
@@ -37,14 +42,14 @@ export function useStockStats(): UseStockStatsReturn {
 
       if (articlesError) throw articlesError
 
-      // 2. Articles with breakage (using RPC function)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // 2. Articles with breakage (using OPTIMIZED RPC function)
+      const args: Record<string, string> = {}
+      if (props?.startDate) args.start_date = props.startDate
+      if (props?.endDate) args.end_date = props.endDate
+
       const { data: breakages, error: breakagesError } = await (supabase as any).rpc(
-        'get_stock_breakages',
-        {
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: '2026-12-31'
-        }
+        'get_stock_breakages_optimized',
+        Object.keys(args).length > 0 ? args : undefined
       )
 
       if (breakagesError) throw breakagesError
@@ -54,7 +59,7 @@ export function useStockStats(): UseStockStatsReturn {
         (breakages || []).map((b: { article_id: string }) => b.article_id)
       ).size
 
-      // Find next breakage date
+      // Find next breakage date (they come sorted by date from optimized RPC)
       const nextBreakageDate =
         breakages && breakages.length > 0
           ? breakages[0].breakage_date
@@ -71,7 +76,7 @@ export function useStockStats(): UseStockStatsReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [props?.startDate, props?.endDate])
 
   useEffect(() => {
     fetchStats()

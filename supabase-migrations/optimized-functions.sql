@@ -8,6 +8,8 @@ DROP FUNCTION IF EXISTS get_stock_breakages_optimized(DATE, DATE);
 DROP FUNCTION IF EXISTS get_article_reservations_optimized(UUID, DATE, DATE);
 
 -- 1. FUNCIÓN PRINCIPAL: Obtener roturas de stock (optimizada)
+-- Muestra artículos en su FECHA DE EVENTO (event_date),
+-- calcula disponibilidad considerando delivery_date..pickup_date.
 -- =====================================================
 CREATE OR REPLACE FUNCTION get_stock_breakages_optimized(
   start_date DATE DEFAULT CURRENT_DATE,
@@ -21,26 +23,13 @@ RETURNS TABLE (
   total_stock BIGINT,
   committed BIGINT,
   available BIGINT,
+  event_day_committed BIGINT,
   stock_sevilla BIGINT,
   stock_jerez BIGINT
 ) AS $$
 BEGIN
   RETURN QUERY
-  WITH event_dates AS (
-    -- OPTIMIZACIÓN CLAVE: Solo días donde HAY eventos (no todos los días del año)
-    -- Esto reduce drásticamente el número de filas a procesar
-    SELECT DISTINCT r.delivery_date AS event_date
-    FROM rentals r
-    WHERE r.delivery_date BETWEEN start_date AND end_date
-      AND r.status != 'cancelled'
-    UNION
-    SELECT DISTINCT r.pickup_date
-    FROM rentals r
-    WHERE r.pickup_date BETWEEN start_date AND end_date
-      AND r.status != 'cancelled'
-  ),
-  article_stock_summary AS (
-    -- Pre-agregar stock por almacén para evitar múltiples JOINs
+  WITH article_stock_summary AS (
     SELECT
       a.id,
       a.code,
@@ -54,34 +43,49 @@ BEGIN
     WHERE a.is_active = true
     GROUP BY a.id, a.code, a.description
   ),
-  daily_commitments AS (
-    -- Calcular compromisos solo para días con eventos
-    SELECT
+  event_dates AS (
+    -- Fechas de EVENTO (event_date) en el rango
+    SELECT DISTINCT
       ri.article_id,
+      r.event_date,
+      SUM(ri.quantity) OVER (PARTITION BY ri.article_id, r.event_date) as event_day_qty
+    FROM rentals r
+    JOIN rental_items ri ON ri.rental_id = r.id
+    JOIN customers c ON c.id = r.customer_id AND c.is_internal = false
+    WHERE r.event_date BETWEEN start_date AND end_date
+      AND r.status != 'cancelled'
+  ),
+  commitments_on_event AS (
+    -- Para cada fecha de evento, calcular el total comprometido ese día
+    -- (considerando delivery_date <= event_date <= pickup_date)
+    SELECT
+      ed.article_id,
       ed.event_date,
+      ed.event_day_qty,
       SUM(ri.quantity) as committed_qty
     FROM event_dates ed
     JOIN rentals r ON r.delivery_date <= ed.event_date
                   AND r.pickup_date >= ed.event_date
                   AND r.status != 'cancelled'
-    JOIN rental_items ri ON ri.rental_id = r.id
+    JOIN rental_items ri ON ri.rental_id = r.id AND ri.article_id = ed.article_id
     JOIN customers c ON c.id = r.customer_id AND c.is_internal = false
-    GROUP BY ri.article_id, ed.event_date
+    GROUP BY ed.article_id, ed.event_date, ed.event_day_qty
   )
   SELECT
     ass.id AS article_id,
     ass.code AS article_code,
     ass.description AS article_description,
-    dc.event_date AS breakage_date,
+    coe.event_date AS breakage_date,
     ass.total_stock AS total_stock,
-    dc.committed_qty AS committed,
-    (ass.total_stock - dc.committed_qty) AS available,
+    coe.committed_qty AS committed,
+    (ass.total_stock - coe.committed_qty) AS available,
+    coe.event_day_qty AS event_day_committed,
     ass.stock_sevilla AS stock_sevilla,
     ass.stock_jerez AS stock_jerez
   FROM article_stock_summary ass
-  JOIN daily_commitments dc ON dc.article_id = ass.id
-  WHERE (ass.total_stock - dc.committed_qty) < 0  -- Solo roturas de stock
-  ORDER BY dc.event_date, ass.description;
+  JOIN commitments_on_event coe ON coe.article_id = ass.id
+  WHERE (ass.total_stock - coe.committed_qty) < 0
+  ORDER BY coe.event_date, ass.description;
 END;
 $$ LANGUAGE plpgsql;
 
