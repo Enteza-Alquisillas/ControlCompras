@@ -24,13 +24,18 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
         const rawData = await legacyService.getLegacyData('articles', warehouse)
         const transformedArticles = transformService.transformArticles(rawData, warehouse)
 
-        const { data: warehouseData } = await (supabase as any)
+        const { data: warehouseData, error } = await (supabase as any)
             .from('warehouses')
             .select('id, code')
             .eq('code', warehouse)
             .single()
 
-        if (!warehouseData) throw new Error(`Warehouse ${warehouse} no encontrado`)
+        if (error) {
+            console.error(`[Action] Error buscando warehouse ${warehouse}:`, error)
+            throw new Error(`Error BD (${error.code || 'Desconocido'}): ${error.message} - Posible fallo de permisos o conexión.`)
+        }
+
+        if (!warehouseData) throw new Error(`Warehouse ${warehouse} no encontrado en base de datos.`)
 
         const stockRecords = rawData.map((item: any) => {
             const effectiveLegacyId = (warehouse === 'JEREZ' && item.ID_MATERIAL_SEVILLA)

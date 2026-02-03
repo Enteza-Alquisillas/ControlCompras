@@ -339,6 +339,11 @@ test('should calculate total with tax', () => {
 - **Fix**: Configurar manualment `/etc/resolv.conf` con un servidor DNS robusto (ej. 8.8.8.8).
 - **Aplicar en**: Cualquier entorno de desarrollo local sobre WSL.
 
+### 2026-02-03: Error `JWSInvalidSignature` en Importación (Auth Fallida)
+- **Error**: La importación fallaba con un falso "Warehouse no encontrado" porque la `SUPABASE_SERVICE_ROLE_KEY` en `.env.local` era inválida, causando que Supabase rechazara la conexión (error 401/403 enmascarado).
+- **Fix**: 1. Actualizar `.env.local` con la clave `service_role` correcta. 2. Mejorar código (`importActions.ts`) para capturar explícitamente errores de `error` en la respuesta de Supabase antes de verificar `data`.
+- **Aplicar en**: Todas las Server Actions que usen `createAdminClient` para acceso privilegiado.
+
 ---
 
 *Este archivo es el cerebro de la fábrica. Cada error documentado la hace más fuerte.*
