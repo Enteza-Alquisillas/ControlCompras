@@ -1,13 +1,14 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 /**
  * Obtiene las fechas de última importación
  * Este archivo está separado de importActions para evitar cargar mssql en producción
+ * Usa createClient (no admin) porque el usuario autenticado tiene permiso de lectura via RLS
  */
 export async function getLastImportDates(): Promise<{ sevilla: string | null; jerez: string | null }> {
-    const supabase = await createAdminClient()
+    const supabase = await createClient()
 
     const { data } = await (supabase as any)
         .from('system_settings')
