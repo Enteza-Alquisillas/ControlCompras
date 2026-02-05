@@ -4,7 +4,7 @@ export { ConnectionTest } from './components/ConnectionTest'
 export { LastImportIndicator } from './components/LastImportIndicator'
 
 // Actions
-export { getLastImportDates } from './actions/importActions'
+export { getLastImportDates } from './actions/syncStatusActions'
 
 // Services
 export { transformService } from './services/transformService'

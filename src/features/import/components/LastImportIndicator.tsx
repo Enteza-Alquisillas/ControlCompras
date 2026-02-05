@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getLastImportDates } from '../actions/importActions'
+import { getLastImportDates } from '../actions/syncStatusActions'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
