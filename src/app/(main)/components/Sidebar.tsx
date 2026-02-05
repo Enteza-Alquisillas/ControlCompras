@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
+import { LastImportIndicator } from '@/features/import'
 
 const navigation = [
   { name: 'Disponibilidad', href: '/dashboard', icon: 'chart' },
@@ -57,7 +58,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200">
+    <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex flex-col">
       {/* Logo */}
       <div className="h-20 flex items-center justify-center px-6 border-b border-gray-200 bg-white">
         <Link href="/dashboard" className="w-full">
@@ -70,7 +71,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="p-4 space-y-1">
+      <nav className="p-4 space-y-1 flex-1">
         {navigation.map((item) => {
           const isActive = pathname === item.href
 
@@ -120,6 +121,11 @@ export function Sidebar() {
           )
         })}
       </nav>
+
+      {/* Sync Status */}
+      <div className="p-4 border-t border-gray-200 flex justify-center">
+        <LastImportIndicator />
+      </div>
 
       {/* Warning Toast */}
       {showWarning && (

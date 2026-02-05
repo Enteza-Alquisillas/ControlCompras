@@ -9,6 +9,39 @@ import { transformService } from '../services/transformService'
 const EXCLUDED_CUSTOMERS = [410000, 110000]
 
 /**
+ * Guarda la fecha de última importación en system_settings
+ */
+async function saveLastImportDate(warehouse: string) {
+    const supabase = await createAdminClient()
+    const key = `last_import_${warehouse.toLowerCase()}`
+    const now = new Date().toISOString()
+
+    await (supabase as any)
+        .from('system_settings')
+        .upsert({ key, value: now, updated_at: now }, { onConflict: 'key' })
+}
+
+/**
+ * Obtiene las fechas de última importación
+ */
+export async function getLastImportDates(): Promise<{ sevilla: string | null; jerez: string | null }> {
+    const supabase = await createAdminClient()
+
+    const { data } = await (supabase as any)
+        .from('system_settings')
+        .select('key, value')
+        .in('key', ['last_import_sevilla', 'last_import_jerez'])
+
+    const result = { sevilla: null as string | null, jerez: null as string | null }
+    data?.forEach((row: any) => {
+        if (row.key === 'last_import_sevilla') result.sevilla = row.value
+        if (row.key === 'last_import_jerez') result.jerez = row.value
+    })
+
+    return result
+}
+
+/**
  * Helper to process array in chunks
  */
 async function processInChunks<T>(items: T[], chunkSize: number, fn: (chunk: T[]) => Promise<void>) {
@@ -78,6 +111,9 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
         })
 
         const upsertResult = await upsertArticlesAction(transformedArticles, stockRecords)
+        if (upsertResult.success) {
+            await saveLastImportDate(warehouse)
+        }
         return upsertResult
     } catch (error: any) {
         console.error('[Action] Error en Importación de Artículos:', error)
@@ -260,6 +296,7 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
         })
 
         console.log(`[Action] ¡Importación de ${warehouse} completada con éxito!`)
+        await saveLastImportDate(warehouse)
         return { success: true, count: rentals.length, table: 'rentals', skippedCount: skippedCustomerCount, totalFound: rawData.length }
 
     } catch (error: any) {
@@ -277,7 +314,11 @@ export async function importCustomersAction(warehouse: 'SEVILLA' | 'JEREZ'): Pro
         const filteredData = rawData.filter((c: any) => !EXCLUDED_CUSTOMERS.includes(c.ID_CLIENTE))
 
         const transformedCustomers = transformService.transformCustomers(filteredData)
-        return await upsertCustomersAction(transformedCustomers)
+        const result = await upsertCustomersAction(transformedCustomers)
+        if (result.success) {
+            await saveLastImportDate(warehouse)
+        }
+        return result
     } catch (error: any) {
         console.error('[Action] Error en Importación de Clientes:', error)
         return { success: false, count: 0, table: 'customers', error: error.message }
