@@ -23,3 +23,4 @@ Thumbs.db
 
 # Lock files (runtime)
 *.lock
+!package-lock.json
