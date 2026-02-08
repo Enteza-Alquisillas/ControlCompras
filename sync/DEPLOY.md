@@ -29,6 +29,19 @@ docker run --rm --env-file .env enteza-sync --test-connections
 docker run --rm --env-file .env -v /var/log/enteza-sync:/app/logs enteza-sync --dry-run
 ```
 
+### 4. Limpieza Post-Instalación (Seguridad)
+Una vez que la imagen Docker está construida (`enteza-sync:latest`), el código fuente ya está empaquetado dentro de la imagen. Puedes borrar el código fuente del servidor para mayor seguridad, dejando solo el archivo de configuración:
+
+```bash
+# Entrar en la carpeta
+cd /opt/enteza-sync
+
+# Borrar TODO excepto el archivo .env
+sudo find . -maxdepth 1 ! -name '.env' ! -name '.' -exec rm -rf {} +
+```
+
+Al borrar esto, el sistema seguirá funcionando porque el **Cron Job** llama directamente a la imagen de Docker y solo necesita el `.env` para las credenciales.
+
 ---
 
 ## Opción 2: Despliegue Manual (npm run sync)
