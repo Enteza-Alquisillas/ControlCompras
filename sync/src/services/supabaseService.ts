@@ -215,15 +215,17 @@ export class SupabaseService {
   async updateLastImportTimestamp(warehouse: string): Promise<void> {
     const logger = getLogger()
     const key = `last_import_${warehouse.toLowerCase()}`
-    try {
-      await this.client.from('system_settings').upsert({
-        key,
-        value: new Date().toISOString(),
-        description: `Timestamp of last successful ${warehouse} import`,
-      }, { onConflict: 'key' })
-      logger.info(`Updated ${key} timestamp`)
-    } catch (error) {
-      logger.error(`Failed to update ${key}`, { error: (error as Error).message })
+    const now = new Date().toISOString()
+
+    const { error } = await this.client.from('system_settings').upsert(
+      { key, value: now, updated_at: now },
+      { onConflict: 'key' }
+    )
+
+    if (error) {
+      logger.error(`Failed to update ${key}`, { error: error.message, code: error.code })
+    } else {
+      logger.info(`Updated ${key} timestamp`, { value: now })
     }
   }
 }

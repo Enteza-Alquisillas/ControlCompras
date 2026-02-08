@@ -42,6 +42,13 @@ export function StockBreakageRow({ breakage, onClick }: StockBreakageRowProps) {
         </span>
       </td>
 
+      {/* Clasificacion (familia) */}
+      <td className="px-3 py-0.5">
+        <span className="text-sm text-gray-600">
+          {breakage.article_family || '—'}
+        </span>
+      </td>
+
       {/* Ventas (comprometido) */}
       <td className="px-3 py-0.5 text-center">
         <span className="text-sm font-semibold text-gray-900">
@@ -64,7 +71,7 @@ export function StockBreakageRow({ breakage, onClick }: StockBreakageRowProps) {
       {/* Salidas del día */}
       <td className="px-3 py-0.5 text-center">
         <span className="text-sm font-medium text-blue-600">
-          {(breakage as any).event_day_committed || 0}
+          {breakage.event_day_committed || 0}
         </span>
       </td>
 

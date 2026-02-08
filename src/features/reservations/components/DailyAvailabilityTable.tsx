@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { useReservationsStore } from '../store/useReservationsStore'
 import { availabilityService } from '@/features/availability/services/availabilityService'
 import { StockBreakage } from '@/features/availability/types'
+import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 
 export function DailyAvailabilityTable() {
     const { selectedDate, selectedArticleId, setSelectedArticleId } = useReservationsStore()
     const [breakages, setBreakages] = useState<StockBreakage[]>([])
+    const [familyMap, setFamilyMap] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
@@ -18,6 +20,21 @@ export function DailyAvailabilityTable() {
                 const dateStr = format(selectedDate, 'yyyy-MM-dd')
                 const data = await availabilityService.getStockBreakages(dateStr, dateStr)
                 setBreakages(data)
+
+                // Fetch family for each article
+                if (data.length > 0) {
+                    const articleIds = [...new Set(data.map(b => b.article_id))]
+                    const supabase = createClient()
+                    const { data: articles } = await supabase
+                        .from('articles')
+                        .select('id, family')
+                        .in('id', articleIds)
+                    const map: Record<string, string> = {}
+                    articles?.forEach((a: { id: string; family: string | null }) => {
+                        if (a.family) map[a.id] = a.family
+                    })
+                    setFamilyMap(map)
+                }
             } catch (error) {
                 console.error('Error loading daily availability:', error)
             } finally {
@@ -60,7 +77,7 @@ export function DailyAvailabilityTable() {
                                     `}
                                 >
                                     <td className="border border-gray-200 px-2 py-1 font-medium">{b.article_description}</td>
-                                    <td className="border border-gray-200 px-2 py-1 text-gray-500 italic">AUTOMATICO</td>
+                                    <td className="border border-gray-200 px-2 py-1 text-gray-500 italic">{familyMap[b.article_id] || '—'}</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right font-bold text-blue-800">{b.committed}</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right text-gray-600">{b.total_stock}</td>
                                     <td className="border border-gray-200 px-2 py-1 text-right font-bold text-red-600">

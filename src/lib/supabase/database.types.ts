@@ -287,10 +287,12 @@ export type Database = {
           article_id: string
           article_code: string | null
           article_description: string
+          article_family: string | null
           breakage_date: string
           total_stock: number
           committed: number
           available: number
+          event_day_committed: number
           stock_sevilla: number
           stock_jerez: number
         }[]

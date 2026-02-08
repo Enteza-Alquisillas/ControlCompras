@@ -19,6 +19,7 @@ RETURNS TABLE (
   article_id UUID,
   article_code TEXT,
   article_description TEXT,
+  article_family TEXT,
   breakage_date DATE,
   total_stock BIGINT,
   committed BIGINT,
@@ -34,6 +35,7 @@ BEGIN
       a.id,
       a.code,
       a.description,
+      a.family,
       COALESCE(SUM(ast.quantity), 0) as total_stock,
       COALESCE(SUM(CASE WHEN w.code = 'SEVILLA' THEN ast.quantity ELSE 0 END), 0) as stock_sevilla,
       COALESCE(SUM(CASE WHEN w.code = 'JEREZ' THEN ast.quantity ELSE 0 END), 0) as stock_jerez
@@ -41,7 +43,7 @@ BEGIN
     LEFT JOIN article_stock ast ON ast.article_id = a.id
     LEFT JOIN warehouses w ON w.id = ast.warehouse_id
     WHERE a.is_active = true
-    GROUP BY a.id, a.code, a.description
+    GROUP BY a.id, a.code, a.description, a.family
   ),
   event_dates AS (
     -- Fechas de EVENTO (event_date) en el rango
@@ -75,6 +77,7 @@ BEGIN
     ass.id AS article_id,
     ass.code AS article_code,
     ass.description AS article_description,
+    ass.family AS article_family,
     coe.event_date AS breakage_date,
     ass.total_stock AS total_stock,
     coe.committed_qty AS committed,

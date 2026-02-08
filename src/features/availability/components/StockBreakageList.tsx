@@ -19,10 +19,12 @@ export function StockBreakageList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
 
-  const filteredBreakages = breakages.filter(b =>
-    b.article_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (b.article_code && b.article_code.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredBreakages = breakages.filter(b => {
+    const term = searchTerm.toLowerCase()
+    return b.article_description.toLowerCase().includes(term) ||
+      (b.article_code && b.article_code.toLowerCase().includes(term)) ||
+      (b.article_family && b.article_family.toLowerCase().includes(term))
+  })
 
   // Reset to page 1 when search changes
   const handleSearchChange = (value: string) => {
@@ -123,6 +125,9 @@ export function StockBreakageList() {
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Articulo
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Clasificacion
                 </th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ventas

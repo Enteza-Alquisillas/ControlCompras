@@ -26,6 +26,10 @@ export function LastImportIndicator() {
       }
     }
     fetchData()
+
+    // Poll every 5 minutes to catch external sync updates
+    const interval = setInterval(fetchData, 5 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   const getLatestImport = () => {
