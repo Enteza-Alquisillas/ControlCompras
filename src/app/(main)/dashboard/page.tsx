@@ -2,6 +2,7 @@
 
 import { StockBreakageList, useStockStats, DateRangeFilter } from '@/features/availability'
 import { useFilterStore } from '@/features/availability/store/filterStore'
+import { LastImportIndicator } from '@/features/import'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -28,7 +29,9 @@ export default function DashboardPage() {
             Vista global de sobreventas y estado de inventario
           </p>
         </div>
-        <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100">
+        <div className="bg-white p-2 rounded-lg shadow-sm border border-gray-100 flex items-center gap-3">
+          <LastImportIndicator />
+          <div className="h-6 w-px bg-gray-200"></div>
           <DateRangeFilter />
         </div>
       </div>

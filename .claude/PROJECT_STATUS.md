@@ -1,6 +1,6 @@
 # Estado del Proyecto: Enteza Reservas App (Machu)
 
-> Ultima actualizacion: 2026-01-26
+> Ultima actualizacion: 2026-02-03
 > Lee este archivo al inicio de cada sesion para retomar el contexto.
 
 ---
@@ -54,7 +54,40 @@ src/features/availability/
 └── index.ts                     # Exports publicos
 ```
 
-**Feature Reservations (NUEVO):**
+**Feature Import (Importacion desde SQL Server):**
+```
+src/features/import/
+├── actions/
+│   └── importActions.ts        # Server Actions para importar datos
+├── services/
+│   ├── legacyService.ts        # Conexion a SQL Server (Sevilla/Jerez)
+│   └── transformService.ts     # Transformacion de datos legacy
+├── types/
+│   └── index.ts                # Tipos legacy y resultados
+└── index.ts
+```
+
+**Sync Service (NUEVO - Cron para CPD):**
+```
+sync/                           # Servicio standalone para cron
+├── src/
+│   ├── index.ts                # CLI entry point
+│   ├── config.ts               # Configuracion desde ENV
+│   ├── services/
+│   │   ├── sqlServerService.ts # Conexion SQL Server
+│   │   ├── supabaseService.ts  # Cliente Supabase con service_role_key
+│   │   ├── syncService.ts      # Orquestador de sincronizacion
+│   │   └── emailService.ts     # Notificaciones por email
+│   ├── transformers/           # Transformadores de datos
+│   ├── utils/                  # Logger y utilidades
+│   └── types/                  # Tipos compartidos
+├── Dockerfile                  # Imagen Docker para produccion
+├── docker-compose.yml
+├── scripts/install.sh          # Script de instalacion en servidor
+└── README.md                   # Documentacion completa
+```
+
+**Feature Reservations:**
 ```
 src/features/reservations/
 ├── components/
@@ -98,7 +131,8 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 | Feature | Estado | Descripcion |
 |---------|--------|-------------|
 | Auth | PENDIENTE | Login/Logout con Supabase Email/Password |
-| Import | PENDIENTE | Importar articulos, stock y reservas (Maestros) |
+| Import (Manual) | COMPLETADO | Server Actions para importar desde SQL Server |
+| Import (Automatico) | COMPLETADO | Servicio sync/ para cron en CPD con Docker |
 | Filtros | PENDIENTE | Búsqueda por artículo en tabla de disponibilidad |
 
 ### Fase 2: Gestión de Operaciones
@@ -141,7 +175,7 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 ## 6. Comandos Utiles
 
 ```bash
-# Desarrollo
+# Desarrollo (App Principal)
 npm run dev              # Servidor en http://localhost:3000
 
 # Verificar tipos
@@ -149,21 +183,34 @@ npm run dev              # Servidor en http://localhost:3000
 
 # Ver migraciones aplicadas
 # Usar Supabase MCP: mcp__supabase__list_migrations
+
+# Sync Service (desde directorio sync/)
+cd sync
+npm install              # Instalar dependencias
+npm run dev -- --dry-run --verbose    # Prueba sin escribir en BD
+npm run sync -- --warehouse SEVILLA   # Sincronizar solo Sevilla
+npm run test:connections              # Probar conexiones a BDs
+
+# Sync Service (Docker)
+docker build -t enteza-sync:latest .
+docker run --rm --env-file .env enteza-sync --dry-run --verbose
 ```
 
 ---
 
 ## 7. Proximos Pasos Recomendados
 
-1. **Implementar Auth** - Para que los usuarios inicien sesion
+1. **Desplegar Sync Service en CPD** - Para sincronizacion automatica
+   - Copiar `sync/` al servidor Linux
+   - Configurar `.env` con credenciales reales
+   - Build Docker: `docker build -t enteza-sync:latest .`
+   - Ejecutar `scripts/install.sh`
+   - Verificar cron jobs en `/etc/cron.d/enteza-sync`
+
+2. **Implementar Auth** - Para que los usuarios inicien sesion
    - Usar Supabase Email/Password
    - Proteger rutas con middleware
    - Mostrar usuario en header
-
-2. **Implementar Import** - Para cargar datos reales
-   - Subir CSV con articulos
-   - Subir CSV con reservas
-   - Mapear campos legacy_id
 
 3. **Mejorar Dashboard** - Stats cards con datos reales
    - Total articulos con stock OK
@@ -189,10 +236,18 @@ new-machu/
 │   │   ├── globals.css          # Tailwind directives
 │   │   └── layout.tsx           # Root layout
 │   ├── features/
-│   │   └── availability/        # Feature implementada
+│   │   ├── availability/        # Feature disponibilidad
+│   │   ├── import/              # Feature importacion manual
+│   │   └── reservations/        # Feature reservas
 │   ├── lib/
 │   │   └── supabase/            # Cliente y tipos
-│   └── shared/                  # Componentes compartidos (vacio)
+│   └── shared/                  # Componentes compartidos
+├── sync/                        # Servicio de sincronizacion (cron)
+│   ├── src/                     # Codigo fuente TypeScript
+│   ├── Dockerfile               # Imagen Docker
+│   ├── docker-compose.yml
+│   ├── scripts/install.sh       # Instalacion en servidor
+│   └── README.md                # Documentacion
 └── package.json
 ```
 
@@ -200,9 +255,17 @@ new-machu/
 
 ## 9. Credenciales y Configuracion
 
-**Supabase:** Configurado via `.env.local` (no commiteado)
+**App Principal (Next.js):** Configurado via `.env.local` (no commiteado)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` (para importacion manual)
+
+**Sync Service:** Configurado via `sync/.env` (no commiteado)
+- `SEVILLA_SQL_SERVER`, `SEVILLA_SQL_DATABASE`, `SEVILLA_SQL_USER`, `SEVILLA_SQL_PASSWORD`
+- `JEREZ_SQL_SERVER`, `JEREZ_SQL_DATABASE`, `JEREZ_SQL_USER`, `JEREZ_SQL_PASSWORD`
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `SMTP_*` (opcional, para notificaciones por email)
+- Ver `sync/.env.example` para lista completa
 
 **MCP Supabase:** Conectado al proyecto (ver `.mcp.json`)
 

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { LastImportIndicator } from '@/features/import'
+import { LogoutButton } from '@/features/auth'
 
 const navigation = [
   { name: 'Disponibilidad', href: '/dashboard', icon: 'chart' },
@@ -122,9 +123,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Sync Status */}
-      <div className="p-4 border-t border-gray-200 flex justify-center">
-        <LastImportIndicator />
+      {/* Sync Status & Logout */}
+      <div className="p-4 border-t border-gray-200 space-y-3">
+        <div className="flex justify-center">
+          <LastImportIndicator />
+        </div>
+        <LogoutButton className="w-full text-center" />
       </div>
 
       {/* Warning Toast */}

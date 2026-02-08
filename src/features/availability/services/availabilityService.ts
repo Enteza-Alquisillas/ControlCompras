@@ -22,7 +22,7 @@ export const availabilityService = {
     const { data, error } = await supabase.rpc(
       'get_stock_breakages_optimized',
       Object.keys(args).length > 0 ? args : undefined
-    )
+    ).range(0, 9999)
 
     if (error) {
       console.error('Error fetching stock breakages:', error)

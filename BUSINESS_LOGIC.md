@@ -197,7 +197,7 @@ CREATE TABLE rentals (
   created_by UUID REFERENCES auth.users(id)
 );
 
--- Líneas de reserva (artículos por reserva)
+-- Lineas de reserva (articulos por reserva)
 CREATE TABLE rental_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   rental_id UUID REFERENCES rentals(id) ON DELETE CASCADE,
@@ -206,8 +206,20 @@ CREATE TABLE rental_items (
   notes TEXT
 );
 
--- Vista: Disponibilidad calculada (para consultas rápidas)
--- Se implementará como función o vista materializada
+-- Configuracion global del sistema
+CREATE TABLE system_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  updated_by UUID REFERENCES auth.users(id)
+);
+
+-- Valores clave:
+-- 'last_import_at' -> Timestamp de ultima sincronizacion exitosa (epoch)
+
+-- Vista: Disponibilidad calculada (para consultas rapidas)
+-- Se implementara como funcion o vista materializada
 ```
 
 ### Lógica de Cálculo de Disponibilidad
@@ -286,10 +298,20 @@ src/features/
 │   └── types/
 │       └── availability.ts          # StockBreakage, ArticleAvailability
 │
-└── import/                  # Importación de datos legacy
-    ├── components/          # ImportWizard, ImportProgress
-    ├── services/            # importService (CSV/Excel → Supabase)
+└── import/                  # Importacion de datos legacy (manual)
+    ├── actions/             # Server Actions para importar
+    ├── services/            # legacyService, transformService
     └── types/               # ImportConfig, ImportResult
+
+sync/                        # Servicio de sincronizacion automatica (standalone)
+├── src/
+│   ├── services/            # sqlServerService, supabaseService, syncService
+│   ├── transformers/        # Transformadores de datos
+│   └── utils/               # Logger, chunker
+├── Dockerfile               # Imagen Docker para produccion
+├── docker-compose.yml
+├── scripts/install.sh       # Instalacion en servidor Linux
+└── README.md                # Documentacion completa
 ```
 
 ### Stack Confirmado
@@ -306,12 +328,61 @@ src/features/
 
 ### Consideraciones de Performance
 
-El sistema legacy procesa día a día desde hoy hasta fin de año. Para optimizar:
+El sistema legacy procesa dia a dia desde hoy hasta fin de año. Para optimizar:
 
-1. **Cálculo bajo demanda**: No precalcular todo, sino calcular cuando se consulta
-2. **Query optimizada**: Una sola query con agregación en lugar de N queries
-3. **Índices**: En `rental_items(article_id)`, `rentals(delivery_date, pickup_date)`
-4. **Caché**: Considerar cache de resultados con invalidación al crear reservas
+1. **Calculo bajo demanda**: No precalcular todo, sino calcular cuando se consulta
+2. **Query optimizada**: Una sola query con agregacion en lugar de N queries
+3. **Indices**: En `rental_items(article_id)`, `rentals(delivery_date, pickup_date)`
+4. **Cache**: Considerar cache de resultados con invalidacion al crear reservas
+
+### Sincronizacion de Datos (SQL Server -> Supabase)
+
+Existen dos mecanismos de sincronizacion:
+
+**1. Importacion Manual (Feature Import)**
+- Ubicacion: `src/features/import/`
+- Uso: Server Actions ejecutadas desde el dashboard de la aplicacion web
+- Cuando usar: Sincronizacion puntual o para pruebas en desarrollo
+- Requiere: Conectividad desde donde corre el frontend (Vercel, localhost)
+
+**2. Sincronizacion Automatica (Sync Service)**
+- Ubicacion: `sync/` (proyecto standalone)
+- Uso: Servicio dockerizado ejecutado via cron en servidor Linux del CPD
+- Frecuencia: Cada 2 horas (configurable)
+- Ventajas:
+  - Acceso directo a SQL Server desde red interna
+  - No depende de la disponibilidad del frontend
+  - Logging detallado con rotacion diaria
+  - Notificaciones por email en caso de error
+  - Lock file para evitar ejecuciones concurrentes
+
+**Arquitectura de Sincronizacion:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MAQUINA LINUX (CPD)                      │
+│                                                             │
+│  ┌──────────────┐     ┌───────────────────────────────────┐│
+│  │    CRON      │────>│      Docker Container             ││
+│  │  0 */2 * * * │     │    enteza-sync:latest             ││
+│  └──────────────┘     └───────────────────────────────────┘│
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+         │                                   │
+         ▼                                   ▼
+┌────────────────────┐              ┌──────────────────┐
+│    SQL Server      │              │    Supabase      │
+│  (Sevilla/Jerez)   │              │   (PostgreSQL)   │
+│   Red interna CPD  │              │   Internet/VPN   │
+└────────────────────┘              └──────────────────┘
+```
+
+**Flujo de sincronizacion:**
+1. Articulos (SEVILLA + JEREZ) -> `articles` + `article_stock`
+2. Clientes (SEVILLA como master) -> `customers` (excluye internos 410000, 110000)
+3. Reservas (SEVILLA + JEREZ) -> `rentals` + `rental_items`
+4. Timestamp -> `system_settings.last_import_at`
+
+Ver `sync/README.md` para documentacion completa de instalacion y uso.
 
 **Query optimizada propuesta:**
 ```sql
@@ -342,16 +413,17 @@ ORDER BY d.target_date, a.description;
 
 ## 8. Fases de Implementación
 
-### Fase 1: MVP - Consulta de Disponibilidad ✅ (ACTUAL)
+### Fase 1: MVP - Consulta de Disponibilidad (EN PROGRESO)
 
-| # | Feature | Descripción |
-|---|---------|-------------|
-| 1 | Auth | Login/Logout con Supabase Email/Password |
-| 2 | Import | Importar artículos, stock y reservas desde CSV/Excel |
-| 3 | Availability | Listado de roturas de stock con detalle por artículo |
-| 4 | Multi-almacén | Mostrar stock Sevilla/Jerez por separado |
+| # | Feature | Estado | Descripcion |
+|---|---------|--------|-------------|
+| 1 | Auth | PENDIENTE | Login/Logout con Supabase Email/Password |
+| 2 | Import Manual | COMPLETADO | Server Actions para importar desde SQL Server |
+| 3 | Import Automatico | COMPLETADO | Servicio `sync/` para cron en CPD con Docker |
+| 4 | Availability | COMPLETADO | Listado de roturas de stock con detalle por articulo |
+| 5 | Multi-almacen | COMPLETADO | Mostrar stock Sevilla/Jerez por separado |
 
-**Entregable:** Aplicación web que replica la funcionalidad del sistema PHP actual.
+**Entregable:** Aplicacion web que replica la funcionalidad del sistema PHP actual.
 
 ### Fase 2: Gestión de Reservas
 
@@ -387,14 +459,18 @@ ORDER BY d.target_date, a.description;
 
 ## 10. Glosario
 
-| Término | Definición |
+| Termino | Definicion |
 |---------|------------|
 | **Rotura de Stock** | Cuando las unidades comprometidas superan el stock disponible |
-| **Sobreventa** | Reservar más unidades de las que se tienen (déficit) |
+| **Sobreventa** | Reservar mas unidades de las que se tienen (deficit) |
 | **Disponibilidad** | Stock total menos unidades comprometidas para una fecha |
-| **Fecha Entrega** | Día en que el material sale del almacén hacia el cliente |
-| **Fecha Recogida** | Día en que el material vuelve al almacén |
-| **Préstamo Interno** | Movimiento de material entre almacenes (no cuenta como reserva) |
+| **Fecha Entrega** | Dia en que el material sale del almacen hacia el cliente |
+| **Fecha Evento** | Dia del evento del cliente (fecha maestra para la UI) |
+| **Fecha Recogida** | Dia en que el material vuelve al almacen |
+| **Prestamo Interno** | Movimiento de material entre almacenes (no cuenta como reserva) |
+| **Sync Service** | Servicio standalone en `sync/` que sincroniza datos automaticamente via cron |
+| **Lock File** | Archivo temporal que previene ejecuciones simultaneas del sync |
+| **Service Role Key** | Clave de Supabase con permisos elevados para bypass de RLS |
 
 ---
 

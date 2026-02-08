@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  enteza-sync:
+    build: .
+    image: enteza-sync:latest
+    container_name: enteza-sync
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    restart: "no"  # Run by cron, not always active
+    networks:
+      - enteza-net
+
+networks:
+  enteza-net:
+    driver: bridge

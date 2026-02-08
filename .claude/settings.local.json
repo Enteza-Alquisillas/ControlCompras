@@ -1,13 +1,18 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./node_modules/.bin/tsc:*)",
+      "Bash(powershell -Command \"Remove-Item -Recurse -Force ''c:\\\\Users\\\\carry\\\\OneDrive\\\\Documentos\\\\Proyectos\\\\new-machu\\\\.next''\")",
+      "Bash(powershell -Command:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(npx tsc:*)"
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "next-devtools",
     "playwright",
     "supabase"
-  ],
-  "permissions": {
-    "allow": [
-      "Bash(./node_modules/.bin/tsc:*)"
-    ]
-  }
+  ]
 }
