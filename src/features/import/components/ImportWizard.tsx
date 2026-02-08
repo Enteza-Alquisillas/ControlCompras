@@ -25,6 +25,23 @@ export function ImportWizard() {
         setImporting(null)
     }
 
+    const handleResetRentals = async () => {
+        if (!confirm('¿Estás seguro de que deseas borrar TODAS las reservas? Esta acción no se puede deshacer y es necesaria para una importación limpia.')) {
+            return
+        }
+
+        setImporting('reset')
+        const result = await importService.resetRentals()
+        setResults(prev => [result, ...prev])
+        setImporting(null)
+
+        if (result.success) {
+            alert('Reservas borradas correctamente. Ahora puedes proceder con una importación limpia.')
+        } else {
+            alert('Error al borrar reservas: ' + result.error)
+        }
+    }
+
     const getTableLabel = (table: string) => {
         const labels: Record<string, string> = {
             articles: 'Artículos y Stock',
@@ -40,17 +57,27 @@ export function ImportWizard() {
                 <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Pasos de Sincronización</h3>
 
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">Almacén Origen:</label>
-                        <select
-                            value={warehouse}
-                            onChange={(e) => setWarehouse(e.target.value as any)}
-                            className="px-3 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm"
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-700">Almacén Origen:</label>
+                            <select
+                                value={warehouse}
+                                onChange={(e) => setWarehouse(e.target.value as any)}
+                                className="px-3 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm"
+                                disabled={importing !== null}
+                            >
+                                <option value="SEVILLA">SEVILLA</option>
+                                <option value="JEREZ">JEREZ</option>
+                            </select>
+                        </div>
+
+                        <button
+                            onClick={handleResetRentals}
                             disabled={importing !== null}
+                            className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-md text-sm font-medium hover:bg-red-100 transition-colors disabled:opacity-50"
                         >
-                            <option value="SEVILLA">SEVILLA</option>
-                            <option value="JEREZ">JEREZ</option>
-                        </select>
+                            {importing === 'reset' ? 'Limpiando...' : 'Vaciar Reservas'}
+                        </button>
                     </div>
                 </div>
                 <div className="p-6">

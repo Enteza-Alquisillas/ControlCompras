@@ -74,6 +74,7 @@ export const legacyService = {
             FROM dbo.EVENTO_ALQUILER e
             LEFT JOIN dbo.EVENTO_ALQUILER_DETALLE ed ON e.ID_EVENTO = ed.ID_EVENTO
             WHERE e.FECHA_EVENTO >= DATEADD(month, -3, GETDATE())
+            AND e.ID_CLIENTE NOT IN (410000, 110000)
           `
                     break
                 case 'test':

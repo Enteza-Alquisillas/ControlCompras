@@ -366,3 +366,35 @@ export async function upsertCustomersAction(customers: any[]): Promise<ImportRes
     }
 }
 
+/**
+ * Borra todas las reservas y sus detalles para permitir una importación limpia
+ */
+export async function resetRentalsAction(): Promise<ImportResult> {
+    const supabase = await createAdminClient()
+    try {
+        console.log('[Action] Iniciando limpieza total de reservas...')
+
+        // 1. Borrar todas las líneas de detalle
+        const { error: itemsError } = await (supabase as any)
+            .from('rental_items')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000') // Borrado masivo (requiere condición en algunos entornos)
+
+        if (itemsError) throw itemsError
+
+        // 2. Borrar todas las cabeceras de reservas
+        const { error: rentalsError } = await (supabase as any)
+            .from('rentals')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000')
+
+        if (rentalsError) throw rentalsError
+
+        console.log('[Action] Limpieza de reservas completada con éxito.')
+        return { success: true, count: 0, table: 'rentals' }
+    } catch (error: any) {
+        console.error('[Action] Error en Reset de Reservas:', error)
+        return { success: false, count: 0, table: 'rentals', error: error.message }
+    }
+}
+

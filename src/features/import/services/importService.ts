@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { transformService } from './transformService'
 import { ImportResult, RentalLegacy } from '../types'
-import { upsertArticlesAction, upsertCustomersAction, importRentalsAction, importArticlesAction, importCustomersAction } from '../actions/importActions'
+import { upsertArticlesAction, upsertCustomersAction, importRentalsAction, importArticlesAction, importCustomersAction, resetRentalsAction } from '../actions/importActions'
 
 export const importService = {
     /**
@@ -35,5 +35,12 @@ export const importService = {
      */
     async importRentals(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
         return await importRentalsAction(warehouse)
+    },
+
+    /**
+     * Reset all rentals data
+     */
+    async resetRentals(): Promise<ImportResult> {
+        return await resetRentalsAction()
     }
 }

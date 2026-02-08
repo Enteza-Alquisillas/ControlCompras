@@ -107,6 +107,7 @@ export class SqlServerService {
           FROM dbo.EVENTO_ALQUILER e
           LEFT JOIN dbo.EVENTO_ALQUILER_DETALLE ed ON e.ID_EVENTO = ed.ID_EVENTO
           WHERE e.FECHA_EVENTO >= DATEADD(month, -3, GETDATE())
+          AND e.ID_CLIENTE NOT IN (410000, 110000)
         `
         const result = await pool.request().query(query)
         logger.info(`Rentals fetched`, { warehouse, count: result.recordset.length })
