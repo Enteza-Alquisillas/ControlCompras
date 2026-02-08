@@ -46,10 +46,10 @@ echo "Installing cron jobs..."
 cat > "$CRON_FILE" << 'EOF'
 # Enteza Sync - Automatic data synchronization
 #
-# Full sync every 2 hours
-0 */2 * * * root docker run --rm --env-file /opt/enteza-sync/.env -v /var/log/enteza-sync:/app/logs enteza-sync >> /var/log/enteza-sync/cron.log 2>&1
+# Sincronización completa: Lun-Vie a las 07, 09, 12, 14 y 16 horas
+0 7,9,12,14,16 * * 1-5 root docker run --rm --env-file /opt/enteza-sync/.env -v /var/log/enteza-sync:/app/logs enteza-sync >> /var/log/enteza-sync/cron.log 2>&1
 
-# Masters sync (articles + customers) once daily at 6am
+# Sincronización de maestros (artículos + clientes) una vez al día a las 6am (opcional/backup)
 0 6 * * * root docker run --rm --env-file /opt/enteza-sync/.env -v /var/log/enteza-sync:/app/logs enteza-sync --only masters >> /var/log/enteza-sync/cron.log 2>&1
 EOF
 

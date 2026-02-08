@@ -72,7 +72,24 @@ Asegúrate de que el archivo `.env` en el servidor tenga:
 - `SUPABASE_SERVICE_ROLE_KEY` correcta.
 - `LOG_DIR` configurado como `/app/logs` para Docker o el path local para manual.
 
-## Logs y Monitoreo
-Si usaste el script de instalación (`install.sh`), los logs están en:
+## Monitoreo y Verificación del Cron
+
+Si usaste el script de instalación (`install.sh`), puedes verificar que la programación es correcta:
+
+### 1. Ver la programación actual
+```bash
+cat /etc/cron.d/enteza-sync
+```
+Deberías ver la línea: `0 7,9,12,14,16 * * 1-5 ...`
+
+### 2. Ver si el proceso se disparó (Logs de Cron)
+```bash
+# Ver las últimas ejecuciones registradas por el sistema
+grep "enteza-sync" /var/log/syslog
+# O ver el log específico del proyecto
+tail -f /var/log/enteza-sync/cron.log
+```
+
+### 3. Ver logs de sincronización
+Los logs detallados de qué registros se importaron están aquí:
 - `/var/log/enteza-sync/sync-YYYY-MM-DD.log`
-- `/var/log/enteza-sync/cron.log` (salida del planificador)
