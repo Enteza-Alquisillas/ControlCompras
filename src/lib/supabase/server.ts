@@ -42,3 +42,19 @@ export async function createAdminClient() {
     }
   )
 }
+
+/** Client for API routes - uses anon key, no cookies needed */
+export function createAnonClient() {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return []
+        },
+        setAll() {},
+      },
+    }
+  )
+}

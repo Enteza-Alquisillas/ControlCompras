@@ -1,6 +1,6 @@
 # Estado del Proyecto: Enteza Reservas App (Machu)
 
-> Ultima actualizacion: 2026-02-03
+> Ultima actualizacion: 2026-02-20
 > Lee este archivo al inicio de cada sesion para retomar el contexto.
 
 ---
@@ -103,6 +103,21 @@ src/features/reservations/
     └── index.ts                 # Tipos compartidos
 ```
 
+**Feature Chat (Asistente IA):**
+```
+src/features/chat/
+├── components/
+│   ├── ChatPage.tsx              # Pagina principal del chat
+│   ├── ChatMessageList.tsx       # Lista de mensajes con scroll
+│   ├── ChatMessage.tsx           # Mensaje individual + tool indicators
+│   └── ChatInput.tsx             # Input con envio
+├── tools/
+│   └── index.ts                  # 10 tools de consulta a Supabase
+└── index.ts                      # Exports publicos
+src/app/api/chat/route.ts         # API endpoint (streamText + OpenAI)
+src/lib/ai/openrouter.ts          # Provider OpenAI (archivo conserva nombre legacy)
+```
+
 **Layout y Navegacion:**
 - `src/app/(main)/layout.tsx` - Layout con sidebar
 - `src/app/(main)/components/Sidebar.tsx` - Navegacion (client component)
@@ -134,6 +149,7 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 | Import (Manual) | COMPLETADO | Server Actions para importar desde SQL Server |
 | Import (Automatico) | COMPLETADO | Servicio sync/ para cron en CPD con Docker |
 | Filtros | PENDIENTE | Búsqueda por artículo en tabla de disponibilidad |
+| Chat Asistente IA | COMPLETADO | Chat con IA para consultas en lenguaje natural (OpenAI, modelo via OPENAI_MODEL en .env.local) |
 
 ### Fase 2: Gestión de Operaciones
 
@@ -169,6 +185,18 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 ### 4. Tipos TypeScript para RPC
 - **Causa:** Supabase client no reconocia funciones
 - **Solucion:** Type assertion en availabilityService.ts
+
+### 5. createAdminClient falla sin SUPABASE_SERVICE_ROLE_KEY
+- **Causa:** El chat usaba `createAdminClient()` que requiere `SUPABASE_SERVICE_ROLE_KEY`
+- **Solucion:** Crear `createAnonClient()` en `server.ts` (anon key, sin cookies). Las tools del chat lo usan ya que RLS permite lectura para anon.
+
+### 6. streamText recibe UIMessage[] en lugar de ModelMessage[]
+- **Causa:** El cliente v6 envía UIMessages con `parts`, pero `streamText` espera `ModelMessage[]` con `content`
+- **Solucion:** Usar `await convertToModelMessages(messages)` en el API route antes de pasarlo a `streamText`. Es async, el await es obligatorio o da error "received Promise"
+
+### 7. Variables de entorno desorganizadas / espacio al inicio
+- **Causa:** Keys de Supabase en `.env.example`, OPENAI_KEY con espacio al inicio en `.env.local`
+- **Solucion:** Consolidar todo en `.env.local` sin espacios. Ver seccion 9 para lista completa.
 
 ---
 
@@ -237,9 +265,11 @@ new-machu/
 │   │   └── layout.tsx           # Root layout
 │   ├── features/
 │   │   ├── availability/        # Feature disponibilidad
+│   │   ├── chat/                # Feature chat asistente IA
 │   │   ├── import/              # Feature importacion manual
 │   │   └── reservations/        # Feature reservas
 │   ├── lib/
+│   │   ├── ai/                  # Provider OpenAI
 │   │   └── supabase/            # Cliente y tipos
 │   └── shared/                  # Componentes compartidos
 ├── sync/                        # Servicio de sincronizacion (cron)
@@ -258,7 +288,9 @@ new-machu/
 **App Principal (Next.js):** Configurado via `.env.local` (no commiteado)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY` (para importacion manual)
+- `SUPABASE_SERVICE_ROLE_KEY` (para importacion manual, NO requerida para el chat)
+- `OPENAI_API_KEY` (para el chat asistente IA)
+- `OPENAI_MODEL` (modelo a usar, ej: gpt-4o-mini o gpt-4o)
 
 **Sync Service:** Configurado via `sync/.env` (no commiteado)
 - `SEVILLA_SQL_SERVER`, `SEVILLA_SQL_DATABASE`, `SEVILLA_SQL_USER`, `SEVILLA_SQL_PASSWORD`
@@ -272,3 +304,6 @@ new-machu/
 ---
 
 *Generado automaticamente. Actualizar despues de cada sesion de trabajo.*
+
+claude --resume d67b19c3-dc2f-4eb8-a629-24f74c9f753a
+
