@@ -265,6 +265,16 @@ export class SyncService {
       // Fetch from SQL Server
       const rawData = await this.sqlServer.getRentals(warehouse)
 
+      // Extract all unique legacy IDs present in Oracle (before transformation).
+      // We use rawData (not the transformed array) so that rentals skipped due to
+      // missing customer mapping are still considered "active" in Oracle and don't
+      // get accidentally cancelled.
+      const activeLegacyIds = [...new Set(rawData.map((r) => r.ID_EVENTO))]
+
+      // The sync window mirrors the SQL Server query: last 3 months by event_date.
+      const sinceDate = new Date()
+      sinceDate.setMonth(sinceDate.getMonth() - 3)
+
       // Load mappings from Supabase
       const customers = await this.supabase.getAllCustomers()
       const articles = await this.supabase.getAllArticles()
@@ -291,7 +301,7 @@ export class SyncService {
       })
 
       if (this.dryRun) {
-        logger.info(`[DRY-RUN] Would upsert ${rentals.length} rentals`)
+        logger.info(`[DRY-RUN] Would upsert ${rentals.length} rentals and check ${activeLegacyIds.length} active legacy IDs against Supabase for cancellations (since ${sinceDate.toISOString().split('T')[0]})`)
         return {
           success: true,
           entity: `rentals-${warehouse}`,
@@ -328,10 +338,23 @@ export class SyncService {
       await this.supabase.deleteRentalItems(rentalIds)
       await this.supabase.insertRentalItems(rentalItems)
 
+      // Cancel rentals in Supabase that are no longer present in Oracle.
+      // Only checks within the same 3-month window used by the SQL Server query.
+      const cancelledCount = await this.supabase.cancelMissingRentals(
+        warehouseId,
+        activeLegacyIds,
+        sinceDate
+      )
+
+      if (cancelledCount > 0) {
+        logger.info(`Detected and cancelled ${cancelledCount} rentals removed from source system`, { warehouse })
+      }
+
       return {
         success: true,
         entity: `rentals-${warehouse}`,
         count: rentals.length,
+        cancelled: cancelledCount,
         skipped: skippedCustomerNotFound + skippedExcluded,
         duration: Date.now() - startTime,
       }

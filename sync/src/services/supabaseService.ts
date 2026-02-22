@@ -190,6 +190,86 @@ export class SupabaseService {
     logger.info(`Upserted ${rentals.length} rentals`)
   }
 
+  /**
+   * Marks as 'cancelled' any rental in Supabase that:
+   * - Belongs to this warehouse
+   * - Has a legacy_id (came from the legacy system)
+   * - Has an event_date within the sync window (sinceDate)
+   * - Is NOT present in the activeLegacyIds list from the source system
+   *
+   * This detects rentals that were cancelled/deleted in Oracle but were
+   * never removed from Supabase by the UPSERT-only strategy.
+   */
+  async cancelMissingRentals(
+    warehouseId: string,
+    activeLegacyIds: number[],
+    sinceDate: Date
+  ): Promise<number> {
+    const logger = getLogger()
+
+    if (activeLegacyIds.length === 0) {
+      logger.warn('cancelMissingRentals: activeLegacyIds is empty - skipping to prevent accidental mass cancellation')
+      return 0
+    }
+
+    const sinceIso = sinceDate.toISOString().split('T')[0]
+    const activeSet = new Set(activeLegacyIds)
+    const toCancel: string[] = []
+    let hasMore = true
+    let offset = 0
+
+    // Load all non-cancelled rentals in the sync window for this warehouse
+    while (hasMore) {
+      const { data, error } = await this.client
+        .from('rentals')
+        .select('id, legacy_id')
+        .eq('warehouse_id', warehouseId)
+        .not('legacy_id', 'is', null)
+        .gte('event_date', sinceIso)
+        .neq('status', 'cancelled')
+        .range(offset, offset + 999)
+
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        // Client-side filter: rentals whose legacy_id is no longer in Oracle
+        for (const r of data) {
+          if (r.legacy_id !== null && !activeSet.has(r.legacy_id)) {
+            toCancel.push(r.id)
+          }
+        }
+        offset += 1000
+        if (data.length < 1000) hasMore = false
+      } else {
+        hasMore = false
+      }
+    }
+
+    if (toCancel.length === 0) {
+      logger.info('cancelMissingRentals: no missing rentals detected', { warehouseId, sinceIso })
+      return 0
+    }
+
+    // Apply cancellation in chunks
+    await processInChunks(toCancel, 200, async (chunk) => {
+      const { error } = await this.client
+        .from('rentals')
+        .update({ status: 'cancelled' })
+        .in('id', chunk)
+
+      if (error) {
+        logger.error('Failed to cancel missing rentals chunk', { error: error.message })
+        throw error
+      }
+    })
+
+    logger.info(`Cancelled ${toCancel.length} rentals no longer present in source system`, {
+      warehouseId,
+      sinceIso,
+    })
+    return toCancel.length
+  }
+
   async deleteRentalItems(rentalIds: string[]): Promise<void> {
     const logger = getLogger()
     await processInChunks(rentalIds, 200, async (chunk) => {

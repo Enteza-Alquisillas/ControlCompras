@@ -36,6 +36,7 @@ export interface SyncResult {
   entity: string
   count: number
   skipped?: number
+  cancelled?: number
   errors?: string[]
   duration?: number
 }
