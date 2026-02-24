@@ -301,7 +301,7 @@ export class SyncService {
       })
 
       if (this.dryRun) {
-        logger.info(`[DRY-RUN] Would upsert ${rentals.length} rentals and check ${activeLegacyIds.length} active legacy IDs against Supabase for cancellations (since ${sinceDate.toISOString().split('T')[0]})`)
+        logger.info(`[DRY-RUN] Would upsert ${rentals.length} VIGENTE rentals and check ${activeLegacyIds.length} active legacy IDs against Supabase for non-vigente deletions (since ${sinceDate.toISOString().split('T')[0]})`)
         return {
           success: true,
           entity: `rentals-${warehouse}`,
@@ -338,23 +338,25 @@ export class SyncService {
       await this.supabase.deleteRentalItems(rentalIds)
       await this.supabase.insertRentalItems(rentalItems)
 
-      // Cancel rentals in Supabase that are no longer present in Oracle.
+      // Delete from Supabase any rental that is no longer VIGENTE in the source system.
+      // The SQL query already filters to STATUS='VIGENTE', so anything absent from
+      // activeLegacyIds either changed status or was deleted in Oracle.
       // Only checks within the same 3-month window used by the SQL Server query.
-      const cancelledCount = await this.supabase.cancelMissingRentals(
+      const deletedCount = await this.supabase.deleteNonVigenteRentals(
         warehouseId,
         activeLegacyIds,
         sinceDate
       )
 
-      if (cancelledCount > 0) {
-        logger.info(`Detected and cancelled ${cancelledCount} rentals removed from source system`, { warehouse })
+      if (deletedCount > 0) {
+        logger.info(`Detected and deleted ${deletedCount} non-vigente rentals (and their items) from Supabase`, { warehouse })
       }
 
       return {
         success: true,
         entity: `rentals-${warehouse}`,
         count: rentals.length,
-        cancelled: cancelledCount,
+        cancelled: deletedCount,
         skipped: skippedCustomerNotFound + skippedExcluded,
         duration: Date.now() - startTime,
       }

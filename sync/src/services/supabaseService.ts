@@ -191,16 +191,17 @@ export class SupabaseService {
   }
 
   /**
-   * Marks as 'cancelled' any rental in Supabase that:
+   * Deletes any rental in Supabase (along with its items) that:
    * - Belongs to this warehouse
    * - Has a legacy_id (came from the legacy system)
    * - Has an event_date within the sync window (sinceDate)
    * - Is NOT present in the activeLegacyIds list from the source system
    *
-   * This detects rentals that were cancelled/deleted in Oracle but were
-   * never removed from Supabase by the UPSERT-only strategy.
+   * This handles rentals whose STATUS changed from VIGENTE (or were deleted)
+   * in the source system. The SQL query already filters to STATUS='VIGENTE',
+   * so anything absent from activeLegacyIds is no longer valid.
    */
-  async cancelMissingRentals(
+  async deleteNonVigenteRentals(
     warehouseId: string,
     activeLegacyIds: number[],
     sinceDate: Date
@@ -208,17 +209,17 @@ export class SupabaseService {
     const logger = getLogger()
 
     if (activeLegacyIds.length === 0) {
-      logger.warn('cancelMissingRentals: activeLegacyIds is empty - skipping to prevent accidental mass cancellation')
+      logger.warn('deleteNonVigenteRentals: activeLegacyIds is empty - skipping to prevent accidental mass deletion')
       return 0
     }
 
     const sinceIso = sinceDate.toISOString().split('T')[0]
     const activeSet = new Set(activeLegacyIds)
-    const toCancel: string[] = []
+    const toDelete: string[] = []
     let hasMore = true
     let offset = 0
 
-    // Load all non-cancelled rentals in the sync window for this warehouse
+    // Load all rentals in the sync window for this warehouse
     while (hasMore) {
       const { data, error } = await this.client
         .from('rentals')
@@ -226,16 +227,15 @@ export class SupabaseService {
         .eq('warehouse_id', warehouseId)
         .not('legacy_id', 'is', null)
         .gte('event_date', sinceIso)
-        .neq('status', 'cancelled')
         .range(offset, offset + 999)
 
       if (error) throw error
 
       if (data && data.length > 0) {
-        // Client-side filter: rentals whose legacy_id is no longer in Oracle
+        // Client-side filter: rentals whose legacy_id is no longer VIGENTE in Oracle
         for (const r of data) {
           if (r.legacy_id !== null && !activeSet.has(r.legacy_id)) {
-            toCancel.push(r.id)
+            toDelete.push(r.id)
           }
         }
         offset += 1000
@@ -245,29 +245,31 @@ export class SupabaseService {
       }
     }
 
-    if (toCancel.length === 0) {
-      logger.info('cancelMissingRentals: no missing rentals detected', { warehouseId, sinceIso })
+    if (toDelete.length === 0) {
+      logger.info('deleteNonVigenteRentals: no non-vigente rentals detected', { warehouseId, sinceIso })
       return 0
     }
 
-    // Apply cancellation in chunks
-    await processInChunks(toCancel, 200, async (chunk) => {
+    // Delete rental items first (foreign key constraint), then delete rentals
+    await this.deleteRentalItems(toDelete)
+
+    await processInChunks(toDelete, 200, async (chunk) => {
       const { error } = await this.client
         .from('rentals')
-        .update({ status: 'cancelled' })
+        .delete()
         .in('id', chunk)
 
       if (error) {
-        logger.error('Failed to cancel missing rentals chunk', { error: error.message })
+        logger.error('Failed to delete non-vigente rentals chunk', { error: error.message })
         throw error
       }
     })
 
-    logger.info(`Cancelled ${toCancel.length} rentals no longer present in source system`, {
+    logger.info(`Deleted ${toDelete.length} non-vigente rentals and their items from Supabase`, {
       warehouseId,
       sinceIso,
     })
-    return toCancel.length
+    return toDelete.length
   }
 
   async deleteRentalItems(rentalIds: string[]): Promise<void> {
