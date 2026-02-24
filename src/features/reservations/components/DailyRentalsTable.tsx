@@ -53,7 +53,7 @@ export function DailyRentalsTable() {
                             <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
                         ) : (
                             rentals
-                            .filter(r => !selectedArticleId || r.items?.some(item => item.article_id === selectedArticleId))
+                            .filter((r: RentalWithCustomer) => !selectedArticleId || r.items?.some(item => item.article_id === selectedArticleId))
                             .map((r) => {
                                 const containsSelectedArticle = selectedArticleId && r.items?.some(item => item.article_id === selectedArticleId);
 
