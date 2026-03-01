@@ -15,7 +15,8 @@ export interface RentalTransformResult {
 export function transformRentals(
   legacyData: RentalLegacy[],
   warehouseId: string,
-  customerMap: Record<number, string>
+  customerMap: Record<number, string>,
+  excludedCustomerIds?: Set<number>
 ): RentalTransformResult {
   const uniqueHeadersMap = new Map<number, TransformedRental>()
   let skippedCustomerNotFound = 0
@@ -24,7 +25,7 @@ export function transformRentals(
   legacyData.forEach((item) => {
     if (uniqueHeadersMap.has(item.ID_EVENTO)) return
 
-    if (isExcludedCustomer(item.ID_CLIENTE)) {
+    if (isExcludedCustomer(item.ID_CLIENTE, excludedCustomerIds)) {
       skippedExcluded++
       return
     }

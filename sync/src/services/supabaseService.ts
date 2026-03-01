@@ -293,6 +293,83 @@ export class SupabaseService {
     logger.info(`Inserted ${items.length} rental items`)
   }
 
+  // ============ Cleanup ============
+  async deleteInternalCustomerData(customerPatterns: string[]): Promise<{
+    customersDeleted: number
+    rentalsDeleted: number
+  }> {
+    const logger = getLogger()
+    let customersDeleted = 0
+    let rentalsDeleted = 0
+
+    for (const pattern of customerPatterns) {
+      // Find customers matching the pattern
+      const { data: matchingCustomers, error: findError } = await this.client
+        .from('customers')
+        .select('id, legacy_id, name')
+        .ilike('name', `%${pattern}%`)
+
+      if (findError) {
+        logger.error('Failed to find internal customers', { error: findError.message, pattern })
+        continue
+      }
+
+      if (!matchingCustomers || matchingCustomers.length === 0) {
+        logger.info(`No customers found matching pattern "${pattern}"`)
+        continue
+      }
+
+      logger.info(`Found ${matchingCustomers.length} internal customers matching "${pattern}"`, {
+        customers: matchingCustomers.map((c) => ({ id: c.id, name: c.name, legacy_id: c.legacy_id })),
+      })
+
+      const customerIds = matchingCustomers.map((c) => c.id)
+
+      // Find rentals for these customers
+      const { data: matchingRentals, error: rentalsError } = await this.client
+        .from('rentals')
+        .select('id')
+        .in('customer_id', customerIds)
+
+      if (rentalsError) {
+        logger.error('Failed to find rentals for internal customers', { error: rentalsError.message })
+        continue
+      }
+
+      if (matchingRentals && matchingRentals.length > 0) {
+        const rentalIds = matchingRentals.map((r) => r.id)
+
+        // Delete rental items
+        await processInChunks(rentalIds, 200, async (chunk) => {
+          await this.client.from('rental_items').delete().in('rental_id', chunk)
+        })
+
+        // Delete rentals
+        await processInChunks(rentalIds, 200, async (chunk) => {
+          await this.client.from('rentals').delete().in('id', chunk)
+        })
+
+        rentalsDeleted += matchingRentals.length
+        logger.info(`Deleted ${matchingRentals.length} rentals for internal customers`)
+      }
+
+      // Delete customers
+      const { error: deleteError } = await this.client
+        .from('customers')
+        .delete()
+        .in('id', customerIds)
+
+      if (deleteError) {
+        logger.error('Failed to delete internal customers', { error: deleteError.message })
+      } else {
+        customersDeleted += matchingCustomers.length
+        logger.info(`Deleted ${matchingCustomers.length} internal customers`)
+      }
+    }
+
+    return { customersDeleted, rentalsDeleted }
+  }
+
   // ============ System Settings ============
   async updateLastImportTimestamp(warehouse: string): Promise<void> {
     const logger = getLogger()

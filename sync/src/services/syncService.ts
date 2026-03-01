@@ -12,6 +12,7 @@ import {
 import {
   transformCustomers,
   filterExcludedCustomers,
+  buildExcludedCustomerIds,
 } from '../transformers/customerTransformer.js'
 import {
   transformRentals,
@@ -275,6 +276,16 @@ export class SyncService {
       const sinceDate = new Date()
       sinceDate.setMonth(sinceDate.getMonth() - 3)
 
+      // Fetch customers from SQL Server to identify excluded ones by name
+      const warehouseCustomers = await this.sqlServer.getCustomers(warehouse)
+      const excludedCustomerIds = buildExcludedCustomerIds(warehouseCustomers)
+      if (excludedCustomerIds.size > 0) {
+        logger.info(`Found ${excludedCustomerIds.size} excluded customers by name/ID`, {
+          warehouse,
+          excludedIds: [...excludedCustomerIds],
+        })
+      }
+
       // Load mappings from Supabase
       const customers = await this.supabase.getAllCustomers()
       const articles = await this.supabase.getAllArticles()
@@ -285,11 +296,12 @@ export class SyncService {
 
       const articleMap = buildArticleMap(articles, warehouse)
 
-      // Transform headers
+      // Transform headers (pass excluded set for name-based filtering)
       const { rentals, skippedCustomerNotFound, skippedExcluded } = transformRentals(
         rawData,
         warehouseId,
-        customerMap
+        customerMap,
+        excludedCustomerIds
       )
 
       logger.info(`Rental transform results`, {
