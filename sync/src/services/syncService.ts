@@ -297,7 +297,7 @@ export class SyncService {
       const articleMap = buildArticleMap(articles, warehouse)
 
       // Transform headers (pass excluded set for name-based filtering)
-      const { rentals, skippedCustomerNotFound, skippedExcluded } = transformRentals(
+      const { rentals, skippedCustomerNotFound, skippedExcluded, skippedInvalidDates, dateWarnings } = transformRentals(
         rawData,
         warehouseId,
         customerMap,
@@ -310,7 +310,15 @@ export class SyncService {
         headers: rentals.length,
         skippedCustomerNotFound,
         skippedExcluded,
+        skippedInvalidDates,
       })
+
+      if (dateWarnings.length > 0) {
+        logger.warn(`Date issues found in ${warehouse} rentals (${dateWarnings.length} records)`, {
+          warehouse,
+          warnings: dateWarnings,
+        })
+      }
 
       if (this.dryRun) {
         logger.info(`[DRY-RUN] Would upsert ${rentals.length} VIGENTE rentals and check ${activeLegacyIds.length} active legacy IDs against Supabase for non-vigente deletions (since ${sinceDate.toISOString().split('T')[0]})`)

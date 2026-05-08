@@ -161,6 +161,8 @@ export type Database = {
           id: string
           legacy_id: number | null
           notes: string | null
+          odoo_order_id: number | null
+          odoo_synced_at: string | null
           pickup_date: string
           status: string | null
         }
@@ -174,6 +176,8 @@ export type Database = {
           id?: string
           legacy_id?: number | null
           notes?: string | null
+          odoo_order_id?: number | null
+          odoo_synced_at?: string | null
           pickup_date: string
           status?: string | null
         }
@@ -187,6 +191,8 @@ export type Database = {
           id?: string
           legacy_id?: number | null
           notes?: string | null
+          odoo_order_id?: number | null
+          odoo_synced_at?: string | null
           pickup_date?: string
           status?: string | null
         }

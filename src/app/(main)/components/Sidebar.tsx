@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Reservas', href: '/reservations', icon: 'calendar' },
   { name: 'Asistente', href: '/chat', icon: 'chat' },
   { name: 'Clientes', href: '/customers', icon: 'users', disabled: true },
+  { name: 'Exportar Odoo', href: '/odoo-export', icon: 'odoo' },
   { name: 'Importar', href: '/import', icon: 'upload', localOnly: true },
 ]
 
@@ -44,6 +45,11 @@ function NavIcon({ icon }: { icon: string }) {
     upload: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+    ),
+    odoo: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
       </svg>
     ),
   }

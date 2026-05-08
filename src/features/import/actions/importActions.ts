@@ -9,6 +9,30 @@ import { transformService } from '../services/transformService'
 const EXCLUDED_CUSTOMERS = [410000, 110000]
 
 /**
+ * Converts a SQL Server date value (Date object or string) to 'YYYY-MM-DD'.
+ * Uses local date parts to avoid UTC timezone shift for dates stored as midnight.
+ * Returns null if the value is null/undefined/invalid.
+ */
+function toDateString(value: unknown): string | null {
+    if (value == null) return null
+    const d = value instanceof Date ? value : new Date(value as string)
+    if (isNaN(d.getTime())) return null
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+/**
+ * Clamps a date string to be within [min, max].
+ */
+function clampDate(value: string, min: string, max: string): string {
+    if (value < min) return min
+    if (value > max) return max
+    return value
+}
+
+/**
  * Guarda la fecha de última importación en system_settings
  */
 async function saveLastImportDate(warehouse: string) {
@@ -172,6 +196,8 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
         const uniqueHeadersMap = new Map<number, any>()
         let skippedCustomerCount = 0
         let excludedCustomerCount = 0
+        let skippedInvalidDates = 0
+        const dateWarnings: string[] = []
 
         rawData.forEach((item: any) => {
             if (!uniqueHeadersMap.has(item.ID_EVENTO)) {
@@ -185,14 +211,40 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
                     return
                 }
 
+                const deliveryDate = toDateString(item.FECHA_ENTREGA)
+                const pickupDate = toDateString(item.FECHA_RECOLECTA)
+                const rawEventDate = toDateString(item.FECHA_EVENTO)
+
+                // Skip rentals with missing required dates
+                if (!deliveryDate || !pickupDate) {
+                    skippedInvalidDates++
+                    dateWarnings.push(`ID_EVENTO ${item.ID_EVENTO}: fechas nulas (ENTREGA=${item.FECHA_ENTREGA}, RECOLECTA=${item.FECHA_RECOLECTA})`)
+                    return
+                }
+
+                // Skip rentals where delivery is after pickup
+                if (deliveryDate > pickupDate) {
+                    skippedInvalidDates++
+                    dateWarnings.push(`ID_EVENTO ${item.ID_EVENTO}: entrega (${deliveryDate}) > recogida (${pickupDate})`)
+                    return
+                }
+
+                // Clamp event_date to [delivery_date, pickup_date] — some legacy records
+                // have FECHA_EVENTO outside the rental window, violating the valid_dates constraint
+                const baseEventDate = rawEventDate ?? deliveryDate
+                const eventDate = clampDate(baseEventDate, deliveryDate, pickupDate)
+                if (eventDate !== baseEventDate) {
+                    dateWarnings.push(`ID_EVENTO ${item.ID_EVENTO}: event_date ajustado de ${baseEventDate} a ${eventDate}`)
+                }
+
                 uniqueHeadersMap.set(item.ID_EVENTO, {
                     legacy_id: item.ID_EVENTO,
                     customer_id: customerId,
                     warehouse_id: warehouseData.id,
                     delivery_address: item.LUGAR_DESCRIPCION,
-                    event_date: item.FECHA_EVENTO,
-                    delivery_date: item.FECHA_ENTREGA,
-                    pickup_date: item.FECHA_RECOLECTA,
+                    event_date: eventDate,
+                    delivery_date: deliveryDate,
+                    pickup_date: pickupDate,
                     status: item.STATUS || 'confirmed',
                     notes: item.NOTAS
                 })
@@ -205,13 +257,41 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
             - Únicos (Cabeceras): ${uniqueHeadersMap.size}
             - Saltados (Cliente no encontrado): ${skippedCustomerCount}
             - Excluidos (Internal/Test): ${excludedCustomerCount}
+            - Saltados (Fechas inválidas): ${skippedInvalidDates}
             - Listos para Upsert: ${rentals.length}`)
 
-        // 4. Upsert Alquileres en bloques
+        if (dateWarnings.length > 0) {
+            console.warn(`[Action] Avisos de fechas (${dateWarnings.length}):`, dateWarnings)
+        }
+
+        // 4. Upsert Alquileres en bloques — con fallback uno a uno para aislar registros malos
+        let upsertedCount = 0
+        let skippedConstraintCount = 0
         await processInChunks(rentals, 500, async (chunk) => {
             const { error } = await (supabase as any).from('rentals').upsert(chunk, { onConflict: 'legacy_id,warehouse_id' })
-            if (error) throw error
+            if (!error) {
+                upsertedCount += chunk.length
+                return
+            }
+            // Chunk failed — retry one by one to isolate the bad record
+            console.warn(`[Action] Chunk de ${chunk.length} rentals falló, reintentando uno a uno...`, error.message)
+            for (const rental of chunk) {
+                const { error: singleError } = await (supabase as any).from('rentals').upsert(rental, { onConflict: 'legacy_id,warehouse_id' })
+                if (singleError) {
+                    skippedConstraintCount++
+                    console.error(`[Action] Saltando rental con datos inválidos:`, {
+                        legacy_id: rental.legacy_id,
+                        event_date: rental.event_date,
+                        delivery_date: rental.delivery_date,
+                        pickup_date: rental.pickup_date,
+                        error: singleError.message,
+                    })
+                } else {
+                    upsertedCount++
+                }
+            }
         })
+        console.log(`[Action] Upsert completado: ${upsertedCount} guardados, ${skippedConstraintCount} saltados por constraint`)
 
         // 5. Cargar IDs de alquileres para el detalle (Paginado tmb por si acaso)
         console.log('[Action] Cargando IDs de alquileres creados/actualizados...')
@@ -277,7 +357,7 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promi
 
         console.log(`[Action] ¡Importación de ${warehouse} completada con éxito!`)
         await saveLastImportDate(warehouse)
-        return { success: true, count: rentals.length, table: 'rentals', skippedCount: skippedCustomerCount, totalFound: rawData.length }
+        return { success: true, count: upsertedCount, table: 'rentals', skippedCount: skippedCustomerCount + skippedInvalidDates + skippedConstraintCount, totalFound: rawData.length }
 
     } catch (error: any) {
         console.error('[Action] Error en Importación Directa:', error)

@@ -176,18 +176,52 @@ export class SupabaseService {
 
   async upsertRentals(rentals: TransformedRental[], chunkSize: number = 500): Promise<void> {
     const logger = getLogger()
+    let upserted = 0
+    let skipped = 0
+
     await processInChunks(rentals, chunkSize, async (chunk) => {
       const { error } = await this.client
         .from('rentals')
         .upsert(chunk, { onConflict: 'legacy_id,warehouse_id' })
 
-      if (error) {
-        logger.error('Failed to upsert rentals chunk', { error: error.message })
-        throw error
+      if (!error) {
+        upserted += chunk.length
+        return
+      }
+
+      // Chunk failed — try records one by one to isolate bad data
+      logger.warn('Rentals chunk failed, retrying one by one to isolate bad records', {
+        chunkSize: chunk.length,
+        error: error.message,
+      })
+
+      for (const rental of chunk) {
+        const { error: singleError } = await this.client
+          .from('rentals')
+          .upsert(rental, { onConflict: 'legacy_id,warehouse_id' })
+
+        if (singleError) {
+          skipped++
+          logger.error('Skipping rental with invalid data', {
+            legacy_id: rental.legacy_id,
+            warehouse_id: rental.warehouse_id,
+            event_date: rental.event_date,
+            delivery_date: rental.delivery_date,
+            pickup_date: rental.pickup_date,
+            status: rental.status,
+            error: singleError.message,
+          })
+        } else {
+          upserted++
+        }
       }
     })
 
-    logger.info(`Upserted ${rentals.length} rentals`)
+    if (skipped > 0) {
+      logger.warn(`Upserted ${upserted} rentals, skipped ${skipped} with constraint violations`)
+    } else {
+      logger.info(`Upserted ${upserted} rentals`)
+    }
   }
 
   /**
