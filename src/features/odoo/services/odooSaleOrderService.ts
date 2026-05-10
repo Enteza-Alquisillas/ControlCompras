@@ -24,36 +24,46 @@ export class OdooSaleOrderService {
   }
 
   /**
-   * Given a Supabase article code (e.g. "ART-2646"):
-   * 1. Strip "ART-" prefix → "2646"
-   * 2. Find the PHYSICAL product in Odoo by default_code = "2646"
-   * 3. Return its product_rental_day_id (the rental SERVICE product to use on order lines)
+   * Batch lookup: resolve many Supabase article codes ("ART-2646", ...) in a single
+   * Odoo RPC. Returns a Map keyed by the original code (with "ART-" prefix preserved).
+   * Codes whose physical product is missing or has no rental service are absent from
+   * the map — callers treat that as "not found" and fall back to a note line.
    */
-  async findProductByCode(code: string): Promise<OdooProductMatch | null> {
-    const numericCode = code.replace(/^ART-/i, '')
-    if (!numericCode) return null
+  async findProductsByCodes(codes: string[]): Promise<Map<string, OdooProductMatch>> {
+    const result = new Map<string, OdooProductMatch>()
 
-    const results = await this.client.searchRead<OdooProduct>(
+    const codeMap = new Map<string, string>() // numericCode → originalCode
+    for (const code of codes) {
+      const numeric = code.replace(/^ART-/i, '')
+      if (numeric) codeMap.set(numeric, code)
+    }
+    if (codeMap.size === 0) return result
+
+    const products = await this.client.searchRead<OdooProduct>(
       'product.product',
-      [['default_code', '=', numericCode]],
+      [['default_code', 'in', Array.from(codeMap.keys())]],
       ['id', 'name', 'default_code', 'uom_id', 'product_rental_day_id'],
-      1
+      codeMap.size
     )
-    if (results.length === 0) return null
 
-    const product = results[0]
+    for (const product of products) {
+      if (!product.default_code) continue
+      const originalCode = codeMap.get(product.default_code)
+      if (!originalCode) continue
+      if (!product.product_rental_day_id) continue
 
-    if (!product.product_rental_day_id) return null
+      // product_rental_day_id is a many2one: [id, name] or false
+      const rentalServiceId = Array.isArray(product.product_rental_day_id)
+        ? product.product_rental_day_id[0]
+        : (product.product_rental_day_id as unknown as number)
 
-    // product_rental_day_id is a many2one: [id, name] or false
-    const rentalServiceId = Array.isArray(product.product_rental_day_id)
-      ? product.product_rental_day_id[0]
-      : (product.product_rental_day_id as unknown as number)
+      // uomId=3 is "Days" — all rental service products use this UoM.
+      // physicalProductId is required as display_product_id on the line so Odoo's
+      // rental UI recognises the order as a true rental.
+      result.set(originalCode, { id: rentalServiceId, uomId: 3, physicalProductId: product.id })
+    }
 
-    // uomId=3 is "Days" — all rental service products use this UoM
-    // physicalProductId is required as display_product_id on the line so Odoo's rental UI
-    // recognises the order as a true rental (sets rental_ok=true, populates warehouses_id, etc.)
-    return { id: rentalServiceId, uomId: 3, physicalProductId: product.id }
+    return result
   }
 
   // Map Supabase warehouse code to Odoo stock.warehouse id
@@ -64,12 +74,19 @@ export class OdooSaleOrderService {
 
   async createSaleOrder(rental: RentalForExport): Promise<number> {
     const customerName = rental.customer?.name ?? 'Cliente desconocido'
-    const partnerId = await this.findOrCreatePartner(
-      customerName,
-      rental.customer?.email ?? undefined
-    )
-
     const warehouseId = this.odooWarehouseId(rental.warehouse?.code)
+
+    // Run partner lookup in parallel with the batch product lookup — they're independent.
+    const codes = rental.items
+      .map((it) => it.article?.code)
+      .filter((c): c is string => !!c)
+    const uniqueCodes = Array.from(new Set(codes))
+
+    const [partnerId, productsByCode] = await Promise.all([
+      this.findOrCreatePartner(customerName, rental.customer?.email ?? undefined),
+      this.findProductsByCodes(uniqueCodes),
+    ])
+
     const orderLines: [0, 0, Record<string, unknown>][] = []
 
     for (const item of rental.items) {
@@ -77,71 +94,60 @@ export class OdooSaleOrderService {
 
       const numericCode = item.article.code?.replace(/^ART-/i, '') ?? ''
 
-      // Base line values — rental fields required by Odoo
-      // name is intentionally omitted so Odoo auto-fills it from the product
-      const lineValues: Record<string, unknown> = {
-        product_uom_qty: item.quantity,
-        rental_qty: item.quantity,
-        price_unit: 0,
-        customer_lead: 0,
-        // Mark this line as a rental line
-        rental: true,
-        rental_type: 'new_rental',
-        // Rental date range propagated to each line
-        start_date: rental.delivery_date,
-        end_date: rental.pickup_date,
-        default_start_date: rental.delivery_date,
-        default_end_date: rental.pickup_date,
-        // Warehouse must be set on every line (warehouse_id = standard field,
-        // warehouses_id = rental-module alias used by Odoo's rental UI)
-        warehouse_id: warehouseId,
-        warehouses_id: warehouseId,
-      }
-
-      if (item.article.code) {
-        const match = await this.findProductByCode(item.article.code)
-        if (match) {
-          // Found the rental service product — use it as a proper rental line.
-          // display_product_id (the PHYSICAL product) is what Odoo's rental UI uses to
-          // identify the rented item; without it rental_ok stays false and the order
-          // isn't treated as a true rental quotation.
-          lineValues.product_id = match.id
-          lineValues.product_uom = match.uomId
-          lineValues.display_product_id = match.physicalProductId
-        } else {
-          // Product not in Odoo or has no rental service.
-          // Constraint sale_order_line_accountable_required_fields requires product_id+product_uom
-          // when display_type IS NULL. Use line_note to avoid the violation.
-          const label = numericCode
-            ? `[${numericCode}] ${item.article.description}`
-            : item.article.description
-          orderLines.push([0, 0, { display_type: 'line_note', name: label }])
-          continue
-        }
-      } else {
-        // No code at all — also insert as a note line
+      if (!item.article.code) {
+        // No code at all — insert as a note line
         orderLines.push([0, 0, { display_type: 'line_note', name: item.article.description }])
         continue
       }
 
-      orderLines.push([0, 0, lineValues])
+      const match = productsByCode.get(item.article.code)
+      if (!match) {
+        // Product not in Odoo or has no rental service.
+        // Constraint sale_order_line_accountable_required_fields requires product_id+product_uom
+        // when display_type IS NULL. Use line_note to avoid the violation.
+        const label = numericCode
+          ? `[${numericCode}] ${item.article.description}`
+          : item.article.description
+        orderLines.push([0, 0, { display_type: 'line_note', name: label }])
+        continue
+      }
+
+      // Base line values — rental fields required by Odoo.
+      // name is intentionally omitted so Odoo auto-fills it from the product.
+      // display_product_id (PHYSICAL product) is what Odoo's rental UI uses to
+      // identify the rented item; without it the order isn't treated as a true rental.
+      orderLines.push([0, 0, {
+        product_id: match.id,
+        product_uom: match.uomId,
+        display_product_id: match.physicalProductId,
+        product_uom_qty: item.quantity,
+        rental_qty: item.quantity,
+        price_unit: 0,
+        customer_lead: 0,
+        rental: true,
+        rental_type: 'new_rental',
+        start_date: rental.delivery_date,
+        end_date: rental.pickup_date,
+        default_start_date: rental.delivery_date,
+        default_end_date: rental.pickup_date,
+        warehouse_id: warehouseId,
+        warehouses_id: warehouseId,
+      }])
     }
 
     if (orderLines.length === 0) {
       throw new Error('El pedido no tiene líneas de artículos válidas')
     }
 
-    // type_id=2 is "Rental Order" in this Odoo 15 instance (sale.order.type)
+    // type_id=2 is "Rental Order" in this Odoo 15 instance (sale.order.type).
+    // The event date is preserved via date_order; the rental window via default_start/end_date.
     const orderValues: Record<string, unknown> = {
       type_id: 2,
       warehouse_id: warehouseId,
       partner_id: partnerId,
       date_order: `${rental.event_date} 00:00:00`,
-      // Rental date range at order level (shown in Odoo rental view)
       default_start_date: rental.delivery_date,
       default_end_date: rental.pickup_date,
-      // Custom field "Fecha Evento" present in this Odoo instance
-      event_date: rental.event_date,
       order_line: orderLines,
     }
 
@@ -164,9 +170,9 @@ export class OdooSaleOrderService {
 
     const orderId = await this.client.create('sale.order', orderValues)
 
-    // Confirmar el pedido para que el módulo OCA Rental genere los registros
-    // sale.rental y el pedido aparezca en la app Alquiler (no solo en Ventas)
-    await this.client.callKw('sale.order', 'action_confirm', [[orderId]])
+    // Se deja como presupuesto (draft). type_id=2 ("Rental Order") + líneas con
+    // display_product_id deberían bastar para que el módulo OCA muestre el
+    // presupuesto en la app Alquiler sin necesidad de confirmarlo.
 
     return orderId
   }
