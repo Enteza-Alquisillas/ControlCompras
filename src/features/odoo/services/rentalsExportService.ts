@@ -18,6 +18,11 @@ function mapRentals(data: Record<string, unknown>[]): RentalForExport[] {
       return { id: item.id, quantity: item.quantity, article }
     })
 
+    const rawWarehouse = rental.warehouse as unknown
+    const warehouse = Array.isArray(rawWarehouse)
+      ? (rawWarehouse[0] as RentalForExport['warehouse']) ?? null
+      : (rawWarehouse as RentalForExport['warehouse'])
+
     return {
       id: rental.id as string,
       legacy_id: rental.legacy_id as number | null,
@@ -29,6 +34,7 @@ function mapRentals(data: Record<string, unknown>[]): RentalForExport[] {
       status: rental.status as string | null,
       odoo_order_id: rental.odoo_order_id as number | null,
       odoo_synced_at: rental.odoo_synced_at as string | null,
+      warehouse,
       customer,
       items,
       itemCount: items.length,
@@ -48,6 +54,7 @@ export async function getRentalsForExportBrowser(
     .select(`
       id, legacy_id, event_date, delivery_date, pickup_date,
       delivery_address, notes, status, odoo_order_id, odoo_synced_at,
+      warehouse:warehouses!warehouse_id (id, code),
       customer:customers!customer_id (id, name, email, phone),
       items:rental_items (
         id, quantity,

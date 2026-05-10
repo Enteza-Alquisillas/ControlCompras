@@ -36,7 +36,7 @@ export class OdooClient {
       }),
     })
 
-    const data = await response.json() as OdooRpcResponse<{ uid: number; session_id: string }>
+    const data = await response.json() as OdooRpcResponse<{ uid: number; session_id?: string }>
 
     if (data.error) {
       throw new Error(`Odoo auth error: ${data.error.data?.message ?? data.error.message}`)
@@ -45,13 +45,33 @@ export class OdooClient {
       throw new Error('Odoo auth failed: credenciales inválidas o base de datos incorrecta')
     }
 
-    // Extract session_id from Set-Cookie header (Odoo sets it as a cookie)
-    const setCookieHeader = response.headers.get('set-cookie') ?? ''
-    const sessionMatch = setCookieHeader.match(/session_id=([^;]+)/)
-    const sessionId = sessionMatch?.[1] ?? data.result.session_id ?? ''
+    // Extract session_id from Set-Cookie header using multiple strategies
+    const sessionId = this.extractSessionId(response)
+
+    if (!sessionId) {
+      throw new Error('Odoo auth failed: no se pudo obtener session_id de la respuesta')
+    }
 
     this.session = { uid: data.result.uid, sessionId }
     return this.session
+  }
+
+  private extractSessionId(response: Response): string {
+    // Strategy 1: getSetCookie() — available in Node.js 18.14+ / undici
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] }
+    if (typeof headers.getSetCookie === 'function') {
+      for (const cookie of headers.getSetCookie()) {
+        const m = cookie.match(/session_id=([a-f0-9]+)/i)
+        if (m?.[1]) return m[1]
+      }
+    }
+
+    // Strategy 2: get('set-cookie') — single or joined string
+    const raw = response.headers.get('set-cookie') ?? ''
+    const m = raw.match(/session_id=([a-f0-9]+)/i)
+    if (m?.[1]) return m[1]
+
+    return ''
   }
 
   async callKw<T>(
@@ -105,6 +125,7 @@ export class OdooClient {
   async write(model: string, ids: number[], values: Record<string, unknown>): Promise<boolean> {
     return this.callKw<boolean>(model, 'write', [ids, values])
   }
+
 }
 
 export function createOdooClient(): OdooClient {

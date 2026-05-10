@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { exportRentalsToOdoo } from '../actions/odooExportActions'
+import { exportRentalsToOdoo, unmarkRentalOdooExport } from '../actions/odooExportActions'
 import type { OdooExportBatchResult, RentalForExport } from '../types'
 
 interface UseOdooExportResult {
@@ -9,11 +9,16 @@ interface UseOdooExportResult {
   isExporting: boolean
   exportResult: OdooExportBatchResult | null
   isResultModalOpen: boolean
+  rentalToUnmark: RentalForExport | null
+  isUnmarking: boolean
   toggleSelect: (id: string) => void
   selectAllPending: (rentals: RentalForExport[]) => void
   clearSelection: () => void
   startExport: () => Promise<void>
   closeResultModal: () => void
+  requestUnmark: (rental: RentalForExport) => void
+  cancelUnmark: () => void
+  confirmUnmark: () => Promise<void>
 }
 
 export function useOdooExport(onSuccess: () => void): UseOdooExportResult {
@@ -21,6 +26,8 @@ export function useOdooExport(onSuccess: () => void): UseOdooExportResult {
   const [isExporting, setIsExporting] = useState(false)
   const [exportResult, setExportResult] = useState<OdooExportBatchResult | null>(null)
   const [isResultModalOpen, setIsResultModalOpen] = useState(false)
+  const [rentalToUnmark, setRentalToUnmark] = useState<RentalForExport | null>(null)
+  const [isUnmarking, setIsUnmarking] = useState(false)
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -76,15 +83,40 @@ export function useOdooExport(onSuccess: () => void): UseOdooExportResult {
     setExportResult(null)
   }, [])
 
+  const requestUnmark = useCallback((rental: RentalForExport) => {
+    setRentalToUnmark(rental)
+  }, [])
+
+  const cancelUnmark = useCallback(() => {
+    setRentalToUnmark(null)
+  }, [])
+
+  const confirmUnmark = useCallback(async () => {
+    if (!rentalToUnmark) return
+    setIsUnmarking(true)
+    try {
+      await unmarkRentalOdooExport(rentalToUnmark.id)
+      setRentalToUnmark(null)
+      onSuccess()
+    } finally {
+      setIsUnmarking(false)
+    }
+  }, [rentalToUnmark, onSuccess])
+
   return {
     selectedIds,
     isExporting,
     exportResult,
     isResultModalOpen,
+    rentalToUnmark,
+    isUnmarking,
     toggleSelect,
     selectAllPending,
     clearSelection,
     startExport,
     closeResultModal,
+    requestUnmark,
+    cancelUnmark,
+    confirmUnmark,
   }
 }

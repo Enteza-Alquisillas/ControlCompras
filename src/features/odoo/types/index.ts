@@ -17,6 +17,7 @@ export interface RentalForExport {
   status: string | null
   odoo_order_id: number | null
   odoo_synced_at: string | null
+  warehouse: { id: string; code: string } | null
   customer: {
     id: string
     name: string
@@ -79,6 +80,17 @@ export interface OdooProduct {
   id: number
   name: string
   default_code: string
+  uom_id: [number, string]
+  // Rental service (day) linked to this physical product
+  product_rental_day_id: [number, string] | false
+}
+
+export interface OdooProductMatch {
+  // Rental service product id (used as product_id on order line)
+  id: number
+  uomId: number
+  // Physical product id (used as display_product_id on order line — Odoo's rental UI relies on this)
+  physicalProductId: number
 }
 
 export interface OdooPartner {

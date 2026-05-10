@@ -6,6 +6,7 @@ import { useOdooExport } from '../hooks/useOdooExport'
 import { RentalsSelectionTable } from './RentalsSelectionTable'
 import { ExportSummaryPanel } from './ExportSummaryPanel'
 import { ExportResultModal } from './ExportResultModal'
+import { UnmarkConfirmModal } from './UnmarkConfirmModal'
 
 function getDefaultDates(): { startDate: string; endDate: string } {
   const now = new Date()
@@ -30,11 +31,16 @@ export function OdooExportPage() {
     isExporting,
     exportResult,
     isResultModalOpen,
+    rentalToUnmark,
+    isUnmarking,
     toggleSelect,
     selectAllPending,
     clearSelection,
     startExport,
     closeResultModal,
+    requestUnmark,
+    cancelUnmark,
+    confirmUnmark,
   } = useOdooExport(refetch)
 
   return (
@@ -99,6 +105,7 @@ export function OdooExportPage() {
               onToggle={toggleSelect}
               onSelectAllPending={() => selectAllPending(rentals)}
               onClearAll={clearSelection}
+              onRequestUnmark={requestUnmark}
             />
           </div>
 
@@ -115,11 +122,21 @@ export function OdooExportPage() {
         </div>
       </div>
 
-      {/* Result modal */}
+      {/* Export result modal */}
       {isResultModalOpen && exportResult && (
         <ExportResultModal
           result={exportResult}
           onClose={closeResultModal}
+        />
+      )}
+
+      {/* Unmark confirmation modal */}
+      {rentalToUnmark && (
+        <UnmarkConfirmModal
+          rental={rentalToUnmark}
+          isUnmarking={isUnmarking}
+          onConfirm={confirmUnmark}
+          onCancel={cancelUnmark}
         />
       )}
     </div>

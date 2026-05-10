@@ -9,6 +9,7 @@ interface RentalsSelectionTableProps {
   onToggle: (id: string) => void
   onSelectAllPending: () => void
   onClearAll: () => void
+  onRequestUnmark: (rental: RentalForExport) => void
 }
 
 function formatDate(dateStr: string): string {
@@ -23,6 +24,7 @@ export function RentalsSelectionTable({
   onToggle,
   onSelectAllPending,
   onClearAll,
+  onRequestUnmark,
 }: RentalsSelectionTableProps) {
   const pendingCount = rentals.filter((r) => r.odoo_order_id === null).length
 
@@ -104,7 +106,7 @@ export function RentalsSelectionTable({
                 <tr
                   key={rental.id}
                   onClick={() => !isExported && onToggle(rental.id)}
-                  className={`transition-colors ${
+                  className={`group transition-colors ${
                     isExported
                       ? 'bg-green-50 cursor-default'
                       : isSelected
@@ -143,12 +145,23 @@ export function RentalsSelectionTable({
                   </td>
                   <td className="px-3 py-3">
                     {isExported ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        #{rental.odoo_order_id}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          #{rental.odoo_order_id}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onRequestUnmark(rental) }}
+                          title="Quitar marca de exportación"
+                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-all"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-400">Pendiente</span>
                     )}

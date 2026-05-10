@@ -5,6 +5,20 @@ import { createOdooClient } from '../services/odooClient'
 import { OdooSaleOrderService } from '../services/odooSaleOrderService'
 import type { OdooExportBatchResult, OdooExportPayload, OdooExportResult, RentalForExport } from '../types'
 
+export async function unmarkRentalOdooExport(rentalId: string): Promise<void> {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('No autenticado')
+
+  const { error } = await (supabase as any)
+    .from('rentals')
+    .update({ odoo_order_id: null, odoo_synced_at: null })
+    .eq('id', rentalId)
+
+  if (error) throw new Error(`Error al quitar la marca: ${error.message}`)
+}
+
 async function loadRentalsForIds(rentalIds: string[]): Promise<RentalForExport[]> {
   const supabase = await createClient()
 
@@ -13,6 +27,7 @@ async function loadRentalsForIds(rentalIds: string[]): Promise<RentalForExport[]
     .select(`
       id, legacy_id, event_date, delivery_date, pickup_date,
       delivery_address, notes, status, odoo_order_id, odoo_synced_at,
+      warehouse:warehouses!warehouse_id (id, code),
       customer:customers!customer_id (id, name, email, phone),
       items:rental_items (
         id, quantity,
@@ -26,6 +41,12 @@ async function loadRentalsForIds(rentalIds: string[]): Promise<RentalForExport[]
 
   return ((data ?? []) as unknown[]).map((rental) => {
     const r = rental as Record<string, unknown>
+
+    const rawWarehouse = r.warehouse as unknown
+    const warehouse = Array.isArray(rawWarehouse)
+      ? (rawWarehouse[0] as RentalForExport['warehouse']) ?? null
+      : (rawWarehouse as RentalForExport['warehouse'])
+
     const rawCustomer = r.customer as unknown
     const customer = Array.isArray(rawCustomer)
       ? (rawCustomer[0] as RentalForExport['customer']) ?? null
@@ -52,6 +73,7 @@ async function loadRentalsForIds(rentalIds: string[]): Promise<RentalForExport[]
       status: r.status as string | null,
       odoo_order_id: r.odoo_order_id as number | null,
       odoo_synced_at: r.odoo_synced_at as string | null,
+      warehouse,
       customer,
       items,
       itemCount: items.length,

@@ -77,8 +77,15 @@ export function ExportResultModal({ result, onClose }: ExportResultModalProps) {
                   {' — '}
                   {r.customerName}
                 </div>
-                {r.success && r.odooOrderId && (
-                  <div className="text-green-700 mt-0.5">Odoo #{r.odooOrderId}</div>
+                {r.success && r.odooOrderId && odooUrl && (
+                  <a
+                    href={`${odooUrl}/web#id=${r.odooOrderId}&model=sale.order&view_type=form`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-700 hover:text-green-900 underline underline-offset-2 mt-0.5 inline-block"
+                  >
+                    Odoo #{r.odooOrderId} ↗
+                  </a>
                 )}
                 {!r.success && r.error && (
                   <div className="text-red-600 mt-0.5 text-xs break-words">{r.error}</div>
@@ -92,7 +99,7 @@ export function ExportResultModal({ result, onClose }: ExportResultModalProps) {
         <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
           {result.successful > 0 && odooUrl && (
             <a
-              href={`${odooUrl}/odoo/sales`}
+              href={`${odooUrl}/web#action=574`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
