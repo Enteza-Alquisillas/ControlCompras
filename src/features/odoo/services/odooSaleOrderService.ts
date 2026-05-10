@@ -146,6 +146,7 @@ export class OdooSaleOrderService {
       warehouse_id: warehouseId,
       partner_id: partnerId,
       date_order: `${rental.event_date} 00:00:00`,
+      event_date: rental.event_date,
       default_start_date: rental.delivery_date,
       default_end_date: rental.pickup_date,
       order_line: orderLines,
