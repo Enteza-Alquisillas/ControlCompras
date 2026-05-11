@@ -122,7 +122,6 @@ export class OdooSaleOrderService {
         display_product_id: match.physicalProductId,
         product_uom_qty: item.quantity,
         rental_qty: item.quantity,
-        price_unit: 0,
         customer_lead: 0,
         rental: true,
         rental_type: 'new_rental',
