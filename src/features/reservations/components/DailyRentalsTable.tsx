@@ -42,20 +42,24 @@ export function DailyRentalsTable() {
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left">CLIENTE</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">ENTREGA</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">RECOGIDA</th>
+                            <th className="border-r border-gray-300 px-2 py-1.5 text-center w-16">PLAZAS</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left">LUGAR</th>
                             <th className="px-2 py-1.5 text-left">NOTAS</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                         {loading ? (
-                            <tr><td colSpan={6} className="p-10 text-center italic text-gray-500">Buscando eventos...</td></tr>
+                            <tr><td colSpan={7} className="p-10 text-center italic text-gray-500">Buscando eventos...</td></tr>
                         ) : rentals.length === 0 ? (
-                            <tr><td colSpan={6} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
+                            <tr><td colSpan={7} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
                         ) : (
                             rentals
                             .filter((r: RentalWithCustomer) => !selectedArticleId || r.items?.some(item => item.article_id === selectedArticleId))
                             .map((r) => {
                                 const containsSelectedArticle = selectedArticleId && r.items?.some(item => item.article_id === selectedArticleId);
+                                const estimatedSeats = (r.items || [])
+                                    .filter(item => item.article?.description?.toLowerCase().includes('silla'))
+                                    .reduce((sum, item) => sum + item.quantity, 0)
 
                                 return (
                                     <tr
@@ -80,6 +84,18 @@ export function DailyRentalsTable() {
                                         </td>
                                         <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-red-700">
                                             {r.pickup_date ? format(new Date(r.pickup_date), 'dd/MM') : '-'}
+                                        </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 text-center">
+                                            {estimatedSeats > 0 ? (
+                                                <span className="inline-flex items-center gap-1 text-purple-700 font-bold">
+                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    </svg>
+                                                    {estimatedSeats}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300">—</span>
+                                            )}
                                         </td>
                                         <td className="border-r border-gray-200 px-2 py-1 truncate max-w-[200px]" title={r.delivery_address || ''}>
                                             {r.delivery_address || 'N/A'}

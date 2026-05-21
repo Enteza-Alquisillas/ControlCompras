@@ -7,7 +7,7 @@ export type Article = Database['public']['Tables']['articles']['Row']
 
 export interface RentalWithCustomer extends Rental {
     customer: Pick<Customer, 'name'> | null
-    items?: { article_id: string }[]
+    items?: { article_id: string; quantity: number; article: { description: string } | null }[]
 }
 
 export interface RentalItemWithArticle extends RentalItem {
