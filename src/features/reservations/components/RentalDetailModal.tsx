@@ -4,6 +4,7 @@ import { useEffect, useState, Fragment } from 'react'
 import { useReservationsStore } from '../store/useReservationsStore'
 import { reservationsService } from '../services/reservationsService'
 import { RentalItemWithArticle, RentalWithCustomer } from '../types'
+import { estimateSeats } from '../utils/estimateSeats'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -64,9 +65,7 @@ export function RentalDetailModal() {
 
     if (!isDetailModalOpen) return null
 
-    const estimatedSeats = items
-        .filter(item => item.article?.description?.toLowerCase().includes('silla'))
-        .reduce((sum, item) => sum + item.quantity, 0)
+    const seatEstimate = estimateSeats(items)
 
     // Filter items based on search term
     const filteredItems = items.filter(item => {
@@ -136,17 +135,21 @@ export function RentalDetailModal() {
                                             {rental.pickup_date ? format(new Date(rental.pickup_date), "dd/MM/yyyy") : 'N/A'}
                                         </p>
                                     </div>
-                                    {estimatedSeats > 0 && (
+                                    {seatEstimate && (
                                         <div className="space-y-1 md:col-span-3 border-t border-gray-100 pt-4">
-                                            <p className="text-[10px] font-bold text-purple-600 uppercase tracking-tighter">Plazas Estimadas</p>
+                                            <p className="text-[10px] font-bold text-purple-600 uppercase tracking-tighter">
+                                                {seatEstimate.source === 'plaza' ? 'Plazas' : 'Plazas Estimadas'}
+                                            </p>
                                             <div className="flex items-center gap-2">
                                                 <span className="inline-flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-800 text-sm font-black px-3 py-1 rounded-full">
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     </svg>
-                                                    {estimatedSeats} plazas
+                                                    {seatEstimate.seats} plazas
                                                 </span>
-                                                <span className="text-[10px] text-gray-400 italic">basado en sillas</span>
+                                                <span className="text-[10px] text-gray-400 italic">
+                                                    {seatEstimate.source === 'plaza' ? 'precio por plaza' : 'estimado por sillas'}
+                                                </span>
                                             </div>
                                         </div>
                                     )}

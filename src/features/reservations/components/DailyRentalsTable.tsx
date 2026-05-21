@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useReservationsStore } from '../store/useReservationsStore'
 import { reservationsService } from '../services/reservationsService'
 import { RentalWithCustomer } from '../types'
+import { estimateSeats } from '../utils/estimateSeats'
 import { format } from 'date-fns'
 
 export function DailyRentalsTable() {
@@ -57,9 +58,7 @@ export function DailyRentalsTable() {
                             .filter((r: RentalWithCustomer) => !selectedArticleId || r.items?.some(item => item.article_id === selectedArticleId))
                             .map((r) => {
                                 const containsSelectedArticle = selectedArticleId && r.items?.some(item => item.article_id === selectedArticleId);
-                                const estimatedSeats = (r.items || [])
-                                    .filter(item => item.article?.description?.toLowerCase().includes('silla'))
-                                    .reduce((sum, item) => sum + item.quantity, 0)
+                                const seatEstimate = estimateSeats(r.items || [])
 
                                 return (
                                     <tr
@@ -86,12 +85,17 @@ export function DailyRentalsTable() {
                                             {r.pickup_date ? format(new Date(r.pickup_date), 'dd/MM') : '-'}
                                         </td>
                                         <td className="border-r border-gray-200 px-2 py-1 text-center">
-                                            {estimatedSeats > 0 ? (
-                                                <span className="inline-flex items-center gap-1 text-purple-700 font-bold">
+                                            {seatEstimate ? (
+                                                <span
+                                                    className="inline-flex items-center gap-1 font-bold"
+                                                    style={{ color: seatEstimate.source === 'plaza' ? '#7c3aed' : '#9333ea' }}
+                                                    title={seatEstimate.source === 'plaza' ? 'Precio por plaza' : 'Estimado por sillas'}
+                                                >
                                                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                     </svg>
-                                                    {estimatedSeats}
+                                                    {seatEstimate.seats}
+                                                    {seatEstimate.source === 'silla' && <span className="text-[9px] font-normal opacity-60">~</span>}
                                                 </span>
                                             ) : (
                                                 <span className="text-gray-300">—</span>
