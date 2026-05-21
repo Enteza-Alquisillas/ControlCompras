@@ -1,6 +1,6 @@
 # Estado del Proyecto: Enteza Reservas App (Machu)
 
-> Ultima actualizacion: 2026-02-20
+> Ultima actualizacion: 2026-05-21
 > Lee este archivo al inicio de cada sesion para retomar el contexto.
 
 ---
@@ -155,6 +155,8 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 
 | Feature | Estado | Descripcion |
 |---------|--------|-------------|
+| Búsqueda por Contrato | COMPLETADO | Input en Eventos Programados, busca por legacy_id y salta a la fecha del evento |
+| Navegación Prev/Next | COMPLETADO | Botones ← #N / Cerrar / #N → en footer del modal de detalle |
 | Customers CRUD | PENDIENTE | Gestión de clientes |
 | Rentals CRUD | PENDIENTE | Pantalla de Nueva Reserva / Edición |
 | Delivery Notes | PENDIENTE | Formatos de impresión de albaranes |
@@ -165,6 +167,9 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 
 - **Fisica vs Visual:** El stock se compromete por el rango total de fechas (entrega-recogida), pero la UI filtra y cuenta eventos solo por la `event_date`.
 - **Calendario V3.1:** Implementado con `BookingCalendar.tsx` para evitar conflictos de caché y renderizado seguro en cliente (`mounted` state) para eliminar Hydration Errors.
+- **Terminología:** El campo `legacy_id` se muestra en UI como "Contrato" (renombrado de "Folio" en 2026-05-21).
+- **Búsqueda por contrato:** `ContractSearch.tsx` en header de Eventos Programados. Usa `reservationsService.searchByContract(legacy_id)` → navega via `navigateToRental` del store.
+- **Navegación modal:** `getAdjacentContracts(legacyId)` busca el legacy_id inmediatamente anterior/posterior (excluye cancelados) para los botones prev/next del footer.
 
 ---
 

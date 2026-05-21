@@ -27,7 +27,9 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(node *)",
-      "Bash(vercel env *)"
+      "Bash(vercel env *)",
+      "Skill(primer)",
+      "mcp__supabase__list_tables"
     ]
   },
   "enableAllProjectMcpServers": true,
