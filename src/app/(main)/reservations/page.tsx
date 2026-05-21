@@ -4,6 +4,7 @@ import { BookingCalendar } from '@/features/reservations/components/BookingCalen
 import { DailyAvailabilityTable } from '@/features/reservations/components/DailyAvailabilityTable'
 import { DailyRentalsTable } from '@/features/reservations/components/DailyRentalsTable'
 import { RentalDetailModal } from '@/features/reservations/components/RentalDetailModal'
+import { ContractSearch } from '@/features/reservations/components/ContractSearch'
 import { useReservationsStore } from '@/features/reservations/store/useReservationsStore'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -43,9 +44,7 @@ export default function ReservationsPage() {
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center px-1">
                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Eventos Programados</h3>
-                    <span className="bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                        Vista por event_date
-                    </span>
+                    <ContractSearch />
                 </div>
                 <DailyRentalsTable />
             </div>

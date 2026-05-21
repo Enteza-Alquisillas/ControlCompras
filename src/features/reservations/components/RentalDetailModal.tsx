@@ -8,11 +8,14 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export function RentalDetailModal() {
-    const { selectedRentalId, isDetailModalOpen, setDetailModalOpen } = useReservationsStore()
+    const { selectedRentalId, isDetailModalOpen, setDetailModalOpen, navigateToRental } = useReservationsStore()
     const [rental, setRental] = useState<RentalWithCustomer | null>(null)
     const [items, setItems] = useState<RentalItemWithArticle[]>([])
     const [searchTerm, setSearchTerm] = useState('')
     const [loading, setLoading] = useState(false)
+    const [prevId, setPrevId] = useState<number | null>(null)
+    const [nextId, setNextId] = useState<number | null>(null)
+    const [navigating, setNavigating] = useState(false)
 
     useEffect(() => {
         if (isDetailModalOpen && selectedRentalId) {
@@ -20,7 +23,9 @@ export function RentalDetailModal() {
                 const id = selectedRentalId
                 if (!id) return
                 setLoading(true)
-                setSearchTerm('') // Reset search when opening new modal
+                setSearchTerm('')
+                setPrevId(null)
+                setNextId(null)
                 try {
                     const [rentalData, itemsData] = await Promise.all([
                         reservationsService.getRentalDetail(id),
@@ -28,6 +33,11 @@ export function RentalDetailModal() {
                     ])
                     setRental(rentalData)
                     setItems(itemsData)
+                    if (rentalData?.legacy_id) {
+                        const adjacent = await reservationsService.getAdjacentContracts(rentalData.legacy_id)
+                        setPrevId(adjacent.prevId)
+                        setNextId(adjacent.nextId)
+                    }
                 } catch (error) {
                     console.error('Error loading rental data:', error)
                     setItems([])
@@ -39,6 +49,18 @@ export function RentalDetailModal() {
             loadData()
         }
     }, [isDetailModalOpen, selectedRentalId])
+
+    const handleNavigate = async (contractNumber: number) => {
+        setNavigating(true)
+        try {
+            const found = await reservationsService.searchByContract(contractNumber)
+            if (!found || !found.event_date) return
+            const eventDate = new Date(found.event_date + 'T12:00:00')
+            navigateToRental(found.id, eventDate)
+        } finally {
+            setNavigating(false)
+        }
+    }
 
     if (!isDetailModalOpen) return null
 
@@ -79,7 +101,7 @@ export function RentalDetailModal() {
                             {rental && (
                                 <div className="bg-white p-6 border-b border-gray-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">Folio (Legacy)</p>
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">Contrato</p>
                                         <p className="text-sm font-black text-blue-900 font-mono">#{rental.legacy_id || 'N/A'}</p>
                                     </div>
                                     <div className="space-y-1">
@@ -116,7 +138,7 @@ export function RentalDetailModal() {
                             <div className="px-6 pb-6 mt-4">
                                 {items.length === 0 ? (
                                     <div className="text-center py-12 bg-white rounded-lg border border-dashed border-gray-300">
-                                        <p className="text-gray-500 italic">No hay artículos registrados para este folio.</p>
+                                        <p className="text-gray-500 italic">No hay artículos registrados para este contrato.</p>
                                     </div>
                                 ) : (
                                     <div className="border border-gray-300 rounded overflow-hidden bg-white shadow-sm">
@@ -208,12 +230,36 @@ export function RentalDetailModal() {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4 bg-gray-100 border-t border-gray-200 flex justify-end">
+                <div className="px-6 py-4 bg-gray-100 border-t border-gray-200 flex justify-between items-center">
+                    {/* Anterior */}
+                    <button
+                        onClick={() => prevId !== null && handleNavigate(prevId)}
+                        disabled={prevId === null || navigating || loading}
+                        className="px-4 py-2 text-xs font-bold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2 shadow-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        {prevId !== null ? `#${prevId}` : 'Anterior'}
+                    </button>
+
                     <button
                         onClick={() => setDetailModalOpen(false)}
                         className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg transition-colors border border-gray-300 shadow-sm"
                     >
-                        Cerrar Ventana
+                        Cerrar
+                    </button>
+
+                    {/* Siguiente */}
+                    <button
+                        onClick={() => nextId !== null && handleNavigate(nextId)}
+                        disabled={nextId === null || navigating || loading}
+                        className="px-4 py-2 text-xs font-bold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2 shadow-sm"
+                    >
+                        {nextId !== null ? `#${nextId}` : 'Siguiente'}
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                     </button>
                 </div>
             </div>

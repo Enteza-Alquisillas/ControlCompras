@@ -63,6 +63,50 @@ export const reservationsService = {
     },
 
     /**
+     * Busca un alquiler por su número de contrato (legacy_id)
+     */
+    async searchByContract(contractNumber: number): Promise<RentalWithCustomer | null> {
+        const supabase = createClient()
+        const { data, error } = await supabase
+            .from('rentals')
+            .select('*, customer:customers(name), items:rental_items(article_id)')
+            .eq('legacy_id', contractNumber)
+            .neq('status', 'cancelled')
+            .single()
+        if (error) return null
+        return (data as any) || null
+    },
+
+    /**
+     * Obtiene los legacy_id anterior y siguiente al contrato dado
+     */
+    async getAdjacentContracts(legacyId: number): Promise<{ prevId: number | null; nextId: number | null }> {
+        const supabase = createClient()
+        const [prevResult, nextResult] = await Promise.all([
+            supabase
+                .from('rentals')
+                .select('legacy_id')
+                .lt('legacy_id', legacyId)
+                .neq('status', 'cancelled')
+                .order('legacy_id', { ascending: false })
+                .limit(1)
+                .single(),
+            supabase
+                .from('rentals')
+                .select('legacy_id')
+                .gt('legacy_id', legacyId)
+                .neq('status', 'cancelled')
+                .order('legacy_id', { ascending: true })
+                .limit(1)
+                .single(),
+        ])
+        return {
+            prevId: (prevResult.data as any)?.legacy_id ?? null,
+            nextId: (nextResult.data as any)?.legacy_id ?? null,
+        }
+    },
+
+    /**
      * Obtiene un resumen de indicadores para el calendario:
      * - eventCount: Basado estrictamente en event_date
      * - hasBreakage: Basado en el cálculo de compromiso (rango entrega-recogida)

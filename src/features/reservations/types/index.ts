@@ -23,4 +23,5 @@ export interface ReservationState {
     setSelectedRentalId: (id: string | null) => void
     setSelectedArticleId: (id: string | null) => void
     setDetailModalOpen: (isOpen: boolean) => void
+    navigateToRental: (id: string, eventDate: Date) => void
 }

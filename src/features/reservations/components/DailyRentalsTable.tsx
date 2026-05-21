@@ -38,7 +38,7 @@ export function DailyRentalsTable() {
                 <table className="w-full text-xs border-collapse">
                     <thead className="sticky top-0 bg-[#E5E7EB] text-gray-700 font-bold border-b border-gray-400">
                         <tr>
-                            <th className="border-r border-gray-300 px-2 py-1.5 text-left w-16">FOLIO</th>
+                            <th className="border-r border-gray-300 px-2 py-1.5 text-left w-16">CONTRATO</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left">CLIENTE</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">ENTREGA</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">RECOGIDA</th>

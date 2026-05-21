@@ -12,4 +12,10 @@ export const useReservationsStore = create<ReservationState>((set) => ({
         selectedArticleId: state.selectedArticleId === id ? null : id
     })),
     setDetailModalOpen: (isOpen) => set({ isDetailModalOpen: isOpen }),
+    navigateToRental: (id, eventDate) => set({
+        selectedRentalId: id,
+        selectedDate: eventDate,
+        isDetailModalOpen: true,
+        selectedArticleId: null,
+    }),
 }))
