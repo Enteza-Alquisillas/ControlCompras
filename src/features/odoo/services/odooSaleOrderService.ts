@@ -4,7 +4,7 @@ import type { OdooPartner, OdooProduct, OdooProductMatch, RentalForExport } from
 export class OdooSaleOrderService {
   constructor(private client: OdooClient) {}
 
-  async findOrCreatePartner(name: string, email?: string): Promise<number> {
+  async findPartner(name: string): Promise<number> {
     const results = await this.client.searchRead<OdooPartner>(
       'res.partner',
       [['name', '=', name]],
@@ -16,11 +16,21 @@ export class OdooSaleOrderService {
       return results[0].id
     }
 
-    return this.client.create('res.partner', {
-      name,
-      email: email ?? false,
-      customer_rank: 1,
-    })
+    // Cliente no existe en Odoo → usar "CLIENTES VARIOS" como fallback
+    const fallback = await this.client.searchRead<OdooPartner>(
+      'res.partner',
+      [['name', '=', 'CLIENTES VARIOS']],
+      ['id', 'name'],
+      1
+    )
+
+    if (fallback.length > 0) {
+      return fallback[0].id
+    }
+
+    throw new Error(
+      `El cliente "${name}" no existe en Odoo y tampoco se encontró el partner "CLIENTES VARIOS". Verifica que exista en Odoo.`
+    )
   }
 
   /**
@@ -83,7 +93,7 @@ export class OdooSaleOrderService {
     const uniqueCodes = Array.from(new Set(codes))
 
     const [partnerId, productsByCode] = await Promise.all([
-      this.findOrCreatePartner(customerName, rental.customer?.email ?? undefined),
+      this.findPartner(customerName),
       this.findProductsByCodes(uniqueCodes),
     ])
 
