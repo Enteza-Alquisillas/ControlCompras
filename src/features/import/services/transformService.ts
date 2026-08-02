@@ -1,5 +1,11 @@
 import { ArticleLegacy, CustomerLegacy, RentalLegacy } from '../types'
 
+function normalizeVat(value: string | null): string | null {
+    if (!value) return null
+    const normalized = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+    return normalized.startsWith('ES') ? normalized.slice(2) || null : normalized || null
+}
+
 export const transformService = {
     /**
      * Map legacy articles to Supabase format
@@ -56,6 +62,7 @@ export const transformService = {
             name: item.NOMBRE_CLIENTE,
             phone: item.TEL1,
             email: item.EMAIL,
+            vat: normalizeVat(item.RFC),
         }))
     },
 

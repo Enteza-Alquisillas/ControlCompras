@@ -12,6 +12,7 @@ export interface CustomerLegacy {
     NOMBRE_CLIENTE: string
     TEL1: string | null
     EMAIL: string | null
+    RFC: string | null
 }
 
 export interface RentalLegacy {

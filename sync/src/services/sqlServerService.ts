@@ -72,7 +72,8 @@ export class SqlServerService {
             ID_CLIENTE,
             NOMBRE_CLIENTE,
             TEL1,
-            EMAIL
+            EMAIL,
+            RFC
           FROM dbo.CLIENTE
         `
         const result = await pool.request().query(query)

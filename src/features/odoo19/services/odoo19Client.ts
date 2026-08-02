@@ -51,9 +51,10 @@ export class Odoo19Client {
     model: string,
     domain: unknown[][],
     fields: string[],
-    context: Record<string, unknown> = {}
+    context: Record<string, unknown> = {},
+    limit = 100
   ): Promise<T[]> {
-    return this.execute<T[]>(model, 'search_read', [domain], { fields, context })
+    return this.execute<T[]>(model, 'search_read', [domain], { fields, context, limit })
   }
 
   async create(

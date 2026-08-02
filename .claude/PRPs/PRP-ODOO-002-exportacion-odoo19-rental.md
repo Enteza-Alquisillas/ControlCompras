@@ -145,6 +145,11 @@ No se modifican `odoo_order_id` ni `odoo_synced_at`, que conservan su significad
 
 > Esta seccion crecera durante la implementacion.
 
+### 2026-08-02: El nombre no es una clave de cliente segura
+- **Error**: La exportacion a Odoo 19 buscaba partners por nombre exacto y fallo con variantes de puntuacion, razon social o localidad.
+- **Fix**: Guardar `dbo.CLIENTE.RFC` normalizado como `customers.vat` y buscar primero por `res.partner.vat`; el nombre solo se usa para clientes legacy sin CIF/NIF.
+- **Aplicar en**: Cualquier integracion de clientes con Odoo.
+
 ---
 
 ## Gotchas

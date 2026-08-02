@@ -24,13 +24,21 @@ function rentalDates(deliveryDate: string, pickupDate: string): { start: string;
   return { start, end: `${pickupDate} ${endTime}` }
 }
 
+function normalizeVat(value: string | null | false): string | null {
+  if (!value) return null
+  const normalized = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return normalized.startsWith('ES') ? normalized.slice(2) || null : normalized || null
+}
+
 export class Odoo19RentalOrderService {
+  private partnersByVat: Map<string, Odoo19Partner[]> | null = null
+
   constructor(private readonly client: Odoo19Client) {}
 
   async createRentalOrder(rental: Odoo19RentalForExport): Promise<{ orderId: number; companyCode: string }> {
     const destination = await this.resolveDestination(rental.warehouse?.code)
     const context = companyContext(destination.companyId)
-    const partnerId = await this.findPartner(rental.customer?.name, context)
+    const partnerId = await this.findPartner(rental.customer?.vat, rental.customer?.name, context)
     const lines = await this.buildRentalLines(rental, context)
     const dates = rentalDates(rental.deliveryDate, rental.pickupDate)
 
@@ -83,17 +91,56 @@ export class Odoo19RentalOrderService {
     return { code: mapping.code, companyId: companies[0].id, warehouseId: warehouses[0].id }
   }
 
-  private async findPartner(name: string | undefined, context: Record<string, unknown>): Promise<number> {
-    if (!name) throw new Error('La reserva no tiene cliente')
+  private async findPartner(
+    vat: string | null | undefined,
+    name: string | undefined,
+    context: Record<string, unknown>
+  ): Promise<number> {
+    const normalizedVat = normalizeVat(vat ?? null)
+
+    if (normalizedVat) {
+      const matches = (await this.getPartnersByVat(context)).get(normalizedVat) ?? []
+
+      if (matches.length === 1) return matches[0].id
+      if (matches.length === 0) throw new Error(`No se encontró cliente en Odoo 19 con CIF/NIF ${normalizedVat}`)
+      throw new Error(`Hay varios clientes en Odoo 19 con CIF/NIF ${normalizedVat}`)
+    }
+
+    if (!name) throw new Error('La reserva no tiene cliente ni CIF/NIF')
 
     const partners = await this.client.searchRead<Odoo19Partner>(
       'res.partner',
       [['name', '=', name]],
-      ['id', 'name'],
+      ['id', 'name', 'vat'],
       context
     )
-    if (partners.length !== 1) throw new Error(`No se encontró un único cliente en Odoo 19: ${name}`)
+    if (partners.length !== 1) {
+      throw new Error(`No se encontró un único cliente en Odoo 19 por nombre: ${name}. Sin CIF/NIF no se puede enlazar automáticamente.`)
+    }
     return partners[0].id
+  }
+
+  private async getPartnersByVat(context: Record<string, unknown>): Promise<Map<string, Odoo19Partner[]>> {
+    if (this.partnersByVat) return this.partnersByVat
+
+    const partners = await this.client.searchRead<Odoo19Partner>(
+      'res.partner',
+      [['vat', '!=', false]],
+      ['id', 'name', 'vat'],
+      context,
+      5000
+    )
+    this.partnersByVat = new Map<string, Odoo19Partner[]>()
+
+    for (const partner of partners) {
+      const vat = normalizeVat(partner.vat)
+      if (!vat) continue
+      const matches = this.partnersByVat.get(vat) ?? []
+      matches.push(partner)
+      this.partnersByVat.set(vat, matches)
+    }
+
+    return this.partnersByVat
   }
 
   private async buildRentalLines(

@@ -53,7 +53,8 @@ export const legacyService = {
                 ID_CLIENTE,
                 NOMBRE_CLIENTE,
                 TEL1,
-                EMAIL
+                EMAIL,
+                RFC
               FROM dbo.CLIENTE
             `
                     break

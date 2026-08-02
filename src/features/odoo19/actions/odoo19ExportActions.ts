@@ -31,7 +31,7 @@ async function loadRentals(rentalIds: string[]): Promise<Odoo19RentalForExport[]
       id, legacy_id, event_date, delivery_date, pickup_date, delivery_address, notes,
       odoo19_order_id, odoo19_synced_at, odoo19_company_code,
       warehouse:warehouses!warehouse_id (id, code),
-      customer:customers!customer_id (id, name, email, phone),
+      customer:customers!customer_id (id, name, email, phone, vat),
       items:rental_items (id, quantity, article:articles!article_id (id, code, description))
     `)
     .in('id', rentalIds)

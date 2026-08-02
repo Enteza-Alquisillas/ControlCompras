@@ -10,7 +10,7 @@ export interface Odoo19RentalForExport {
   odoo19OrderId: number | null
   odoo19SyncedAt: string | null
   warehouse: { id: string; code: string } | null
-  customer: { id: string; name: string; email: string | null; phone: string | null } | null
+  customer: { id: string; name: string; email: string | null; phone: string | null; vat: string | null } | null
   items: Array<{
     id: string
     quantity: number
@@ -49,6 +49,7 @@ export interface Odoo19Warehouse {
 export interface Odoo19Partner {
   id: number
   name: string
+  vat: string | false
 }
 
 export interface Odoo19Product {

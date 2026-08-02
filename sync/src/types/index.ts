@@ -13,6 +13,7 @@ export interface CustomerLegacy {
   NOMBRE_CLIENTE: string
   TEL1: string | null
   EMAIL: string | null
+  RFC: string | null
 }
 
 export interface RentalLegacy {
@@ -72,6 +73,7 @@ export interface TransformedCustomer {
   name: string
   phone: string | null
   email: string | null
+  vat: string | null
 }
 
 export interface TransformedRental {

@@ -132,6 +132,7 @@ supabase-migrations/add-odoo19-fields-to-rentals.sql
 - Mantiene sin cambios el exportador actual de Odoo 15.
 - `SEVILLA` se exporta a Visuena y `JEREZ` a Stileum, resolviendo compania y almacen sin IDs fijos.
 - Requiere aplicar la migracion SQL y configurar `ODOO19_*` en Vercel antes de usarla.
+- El enlace de clientes prioriza `customers.vat` (desde `dbo.CLIENTE.RFC`) contra `res.partner.vat`; el nombre exacto queda solo como compatibilidad para clientes sin CIF/NIF.
 
 **Layout y Navegacion:**
 - `src/app/(main)/layout.tsx` - Layout con sidebar

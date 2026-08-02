@@ -88,6 +88,7 @@ export type Database = {
           legacy_id: number | null
           name: string
           phone: string | null
+          vat: string | null
         }
         Insert: {
           address?: string | null
@@ -98,6 +99,7 @@ export type Database = {
           legacy_id?: number | null
           name: string
           phone?: string | null
+          vat?: string | null
         }
         Update: {
           address?: string | null
@@ -108,6 +110,7 @@ export type Database = {
           legacy_id?: number | null
           name?: string
           phone?: string | null
+          vat?: string | null
         }
         Relationships: []
       }
