@@ -162,9 +162,13 @@ export type Database = {
           legacy_id: number | null
           notes: string | null
           odoo_order_id: number | null
+          odoo19_company_code: string | null
+          odoo19_order_id: number | null
+          odoo19_synced_at: string | null
           odoo_synced_at: string | null
           pickup_date: string
           status: string | null
+          warehouse_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -177,9 +181,13 @@ export type Database = {
           legacy_id?: number | null
           notes?: string | null
           odoo_order_id?: number | null
+          odoo19_company_code?: string | null
+          odoo19_order_id?: number | null
+          odoo19_synced_at?: string | null
           odoo_synced_at?: string | null
           pickup_date: string
           status?: string | null
+          warehouse_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -192,9 +200,13 @@ export type Database = {
           legacy_id?: number | null
           notes?: string | null
           odoo_order_id?: number | null
+          odoo19_company_code?: string | null
+          odoo19_order_id?: number | null
+          odoo19_synced_at?: string | null
           odoo_synced_at?: string | null
           pickup_date?: string
           status?: string | null
+          warehouse_id?: string | null
         }
         Relationships: [
           {
@@ -202,6 +214,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rentals_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
             referencedColumns: ["id"]
           },
         ]

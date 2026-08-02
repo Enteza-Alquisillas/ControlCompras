@@ -118,6 +118,21 @@ src/app/api/chat/route.ts         # API endpoint (streamText + OpenAI)
 src/lib/ai/openrouter.ts          # Provider OpenAI (archivo conserva nombre legacy)
 ```
 
+**Feature Odoo 19 (Alquiler nativo):**
+```
+src/features/odoo19/              # Exportador independiente de Odoo 15
+├── actions/                      # Exportacion y desmarcado Odoo 19
+├── components/                   # Pantalla /odoo19-export
+├── hooks/                        # Carga y seleccion de reservas
+├── services/                     # JSON-RPC, resolucion multi-compania y rental nativo
+└── types/
+supabase-migrations/add-odoo19-fields-to-rentals.sql
+```
+
+- Mantiene sin cambios el exportador actual de Odoo 15.
+- `SEVILLA` se exporta a Visuena y `JEREZ` a Stileum, resolviendo compania y almacen sin IDs fijos.
+- Requiere aplicar la migracion SQL y configurar `ODOO19_*` en Vercel antes de usarla.
+
 **Layout y Navegacion:**
 - `src/app/(main)/layout.tsx` - Layout con sidebar
 - `src/app/(main)/components/Sidebar.tsx` - Navegacion (client component)

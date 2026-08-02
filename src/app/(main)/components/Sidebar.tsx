@@ -12,6 +12,7 @@ const navigation = [
   { name: 'Asistente', href: '/chat', icon: 'chat' },
   { name: 'Clientes', href: '/customers', icon: 'users', disabled: true },
   { name: 'Exportar Odoo', href: '/odoo-export', icon: 'odoo' },
+  { name: 'Exportar Odoo 19', href: '/odoo19-export', icon: 'odoo19' },
   { name: 'Importar', href: '/import', icon: 'upload', localOnly: true },
 ]
 
@@ -50,6 +51,11 @@ function NavIcon({ icon }: { icon: string }) {
     odoo: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+      </svg>
+    ),
+    odoo19: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l-4-4m4 4l4-4M5 19h14" />
       </svg>
     ),
   }
