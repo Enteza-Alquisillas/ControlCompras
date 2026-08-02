@@ -104,7 +104,7 @@ export class Odoo19Client {
             lastError = new Error(`Odoo 19 devolvió HTTP ${response.status}`)
             continue
           }
-          throw new Error(`Odoo 19 devolvió HTTP ${response.status}`)
+          throw new Odoo19RpcError(`Odoo 19 devolvió HTTP ${response.status}`)
         }
 
         const data = (await response.json()) as OdooRpcResponse<T>
