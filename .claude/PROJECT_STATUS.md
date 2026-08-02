@@ -1,6 +1,6 @@
 # Estado del Proyecto: Enteza Reservas App (Machu)
 
-> Ultima actualizacion: 2026-05-21
+> Ultima actualizacion: 2026-08-02
 > Lee este archivo al inicio de cada sesion para retomar el contexto.
 
 ---
@@ -134,6 +134,13 @@ supabase-migrations/add-odoo19-fields-to-rentals.sql
 - Requiere aplicar la migracion SQL y configurar `ODOO19_*` en Vercel antes de usarla.
 - El enlace de clientes prioriza `customers.vat` (desde `dbo.CLIENTE.RFC`) contra `res.partner.vat`; el nombre exacto queda solo como compatibilidad para clientes sin CIF/NIF.
 
+**Estado de puesta en marcha Odoo 19:**
+- Migracion `add-odoo19-fields-to-rentals.sql` aplicada en Supabase para el seguimiento independiente de pedidos Odoo 19.
+- Migracion `add-customer-vat.sql` aplicada en Supabase para guardar CIF/NIF de clientes.
+- Sincronizacion puntual de clientes ejecutada el 2026-08-02: 4.108 clientes actualizados, 1 interno excluido y 2.898 con CIF/NIF (`customers.vat`).
+- Caso validado: contrato `#11250699`, cliente Trevion, enlaza por CIF/NIF `B21641030` con el partner Odoo 19 `#2208`.
+- La configuracion local Odoo 19 esta en `.env.local`; las mismas variables `ODOO19_*` deben existir en Vercel para que el exportador funcione en produccion.
+
 **Layout y Navegacion:**
 - `src/app/(main)/layout.tsx` - Layout con sidebar
 - `src/app/(main)/components/Sidebar.tsx` - Navegacion (client component)
@@ -177,6 +184,14 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 | Rentals CRUD | PENDIENTE | Pantalla de Nueva Reserva / Edición |
 | Delivery Notes | PENDIENTE | Formatos de impresión de albaranes |
 
+### Integración Odoo 19
+
+| Feature | Estado | Descripcion |
+|---------|--------|-------------|
+| Exportacion Rental Odoo 19 | COMPLETADO | Ruta `/odoo19-export`, crea alquileres nativos y conserva Odoo 15 intacto |
+| Enlace de clientes por CIF/NIF | COMPLETADO | `dbo.CLIENTE.RFC` -> `customers.vat` -> `res.partner.vat` |
+| Validacion de exportacion real | PENDIENTE | Probar pedidos Sevilla y Jerez desde la version desplegada |
+
 ---
 
 ## 4. Decisiones Tecnicas Clave
@@ -186,6 +201,9 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 - **Terminología:** El campo `legacy_id` se muestra en UI como "Contrato" (renombrado de "Folio" en 2026-05-21).
 - **Búsqueda por contrato:** `ContractSearch.tsx` en header de Eventos Programados. Usa `reservationsService.searchByContract(legacy_id)` → navega via `navigateToRental` del store.
 - **Navegación modal:** `getAdjacentContracts(legacyId)` busca el legacy_id inmediatamente anterior/posterior (excluye cancelados) para los botones prev/next del footer.
+- **Odoo 19 Rental:** La feature `src/features/odoo19/` es independiente de `src/features/odoo/` (Odoo 15). Crea `sale.order` con `is_rental_order`, `rental_start_date` y `rental_return_date`; las fechas de línea no se escriben porque son calculadas en Odoo 19.
+- **Multi-compañía Odoo 19:** `SEVILLA` se resuelve hacia `Visueña de Material Plegable, S.L.` y `JEREZ` hacia `Stileum`, incluyendo el único almacén de cada compañía. No hay IDs numéricos hardcodeados.
+- **Clientes Odoo 19:** Se normaliza el CIF/NIF eliminando espacios, guiones y prefijo `ES`. Un CIF/NIF debe resolver exactamente un `res.partner`; si falta, no existe o está duplicado, el pedido se bloquea para revisión. El nombre exacto solo es fallback cuando el cliente legacy no tiene CIF/NIF.
 
 ---
 
@@ -218,6 +236,11 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 ### 7. Variables de entorno desorganizadas / espacio al inicio
 - **Causa:** Keys de Supabase en `.env.example`, OPENAI_KEY con espacio al inicio en `.env.local`
 - **Solucion:** Consolidar todo en `.env.local` sin espacios. Ver seccion 9 para lista completa.
+
+### 8. Exportacion Odoo 19 fallaba por diferencias de nombre de cliente
+- **Causa:** El enlace inicial buscaba `res.partner.name` de forma exacta. Nombres con puntuacion, localidad o razon social distinta no coincidian, aunque fueran el mismo cliente.
+- **Solucion:** Obtener `dbo.CLIENTE.RFC`, almacenarlo normalizado en `customers.vat` y usarlo como clave principal contra `res.partner.vat`.
+- **Aplicar en:** Cualquier integracion futura de clientes con Odoo.
 
 ---
 
@@ -312,6 +335,9 @@ new-machu/
 - `SUPABASE_SERVICE_ROLE_KEY` (para importacion manual, NO requerida para el chat)
 - `OPENAI_API_KEY` (para el chat asistente IA)
 - `OPENAI_MODEL` (modelo a usar, ej: gpt-4o-mini o gpt-4o)
+- `ODOO19_URL`, `ODOO19_DB`, `ODOO19_USER`, `ODOO19_API_KEY`
+- `ODOO19_SEVILLA_COMPANY=Visueña de Material Plegable, S.L.`
+- `ODOO19_JEREZ_COMPANY=Stileum`
 
 **Sync Service:** Configurado via `sync/.env` (no commiteado)
 - `SEVILLA_SQL_SERVER`, `SEVILLA_SQL_DATABASE`, `SEVILLA_SQL_USER`, `SEVILLA_SQL_PASSWORD`
