@@ -150,6 +150,13 @@ No se modifican `odoo_order_id` ni `odoo_synced_at`, que conservan su significad
 - **Fix**: Guardar `dbo.CLIENTE.RFC` normalizado como `customers.vat` y buscar primero por `res.partner.vat`; el nombre solo se usa para clientes legacy sin CIF/NIF.
 - **Aplicar en**: Cualquier integracion de clientes con Odoo.
 
+### 2026-08-15: Migracion a JSON-2 y mensajes de error poco explicativos
+- **Contexto**: El cliente usaba el endpoint clasico `/jsonrpc` (`common.authenticate` + `object.execute_kw`). Odoo 19 recomienda ahora `/json/2/<model>/<method>` con autenticacion `Authorization: Bearer <api_key>` (sin usuario/uid) y errores HTTP explicitos (401/403/404/422/5xx) en vez de siempre HTTP 200 con un envoltorio `error`.
+- **Error real**: El mensaje detallado de Odoo (`error.data.message`) ya se extraia correctamente, pero no incluia que operacion (modelo.metodo) habia fallado, así que un fallo de negocio generico en Odoo (no cubierto por las validaciones propias del servicio) era dificil de ubicar sin ver el traceback completo.
+- **Fix**: Cliente reescrito sobre JSON-2. Cada error lanzado incluye el `modelo.metodo` de la operacion Odoo que fallo y el mensaje de negocio real devuelto por Odoo; el traceback (`debug`) se registra en logs de servidor (`console.error`) sin exponerse al usuario. Los reintentos (red y HTTP 5xx) ya no descartan el cuerpo del error: si Odoo responde con detalle en un 5xx, se conserva para el mensaje final si se agotan los reintentos. Los errores 4xx (auth, permisos, validacion) no se reintentan y usan un mensaje especifico por codigo HTTP.
+- **Verificado en real**: Se confirmo contra `enteza19.xtendoo.es` que los campos many2one (`partner_id`, `company_id`, `warehouse_id`) se guardan correctamente al crear via JSON-2 `sale.order.create` (el bug conocido de Odoo, issue odoo/odoo#233990, no aplica a `sale.order` en esta version). `create` en JSON-2 devuelve un array de IDs (`vals_list` es siempre una lista), no un ID suelto como en `execute_kw`.
+- **Aplicar en**: Cualquier cliente futuro de Odoo 19 en este proyecto; preferir JSON-2 sobre XML-RPC/JSON-RPC clasico.
+
 ---
 
 ## Gotchas

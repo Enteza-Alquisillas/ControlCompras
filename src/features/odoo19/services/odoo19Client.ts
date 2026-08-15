@@ -1,25 +1,37 @@
 interface Odoo19Config {
   url: string
   database: string
-  user: string
   apiKey: string
   sevillaCompany: string
   jerezCompany: string
 }
 
-interface OdooRpcResponse<T> {
-  result?: T
-  error?: { message?: string; data?: { message?: string; debug?: string } }
+interface Odoo19ErrorBody {
+  name?: string
+  message?: string
+  debug?: string
 }
 
 const RETRY_DELAYS_MS = [1000, 4000, 9000]
 
-class Odoo19RpcError extends Error {}
+export class Odoo19Error extends Error {}
+
+function parseJsonSafely(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+function describeClientError(status: number, operation: string, detail: string): string {
+  if (status === 401) return `Odoo 19 rechazó la API key al ejecutar ${operation}. Revisa ODOO19_API_KEY.`
+  if (status === 403) return `Sin permisos en Odoo 19 para ${operation}: ${detail}`
+  if (status === 404) return `Odoo 19 no reconoce ${operation} (modelo, método o URL incorrectos): ${detail}`
+  return `Odoo 19 rechazó ${operation}: ${detail}`
+}
 
 export class Odoo19Client {
-  private uid: number | null = null
-  private requestId = 0
-
   constructor(private readonly config: Odoo19Config) {}
 
   get companyNames(): { sevilla: string; jerez: string } {
@@ -29,24 +41,6 @@ export class Odoo19Client {
     }
   }
 
-  async execute<T>(
-    model: string,
-    method: string,
-    args: unknown[],
-    kwargs: Record<string, unknown> = {}
-  ): Promise<T> {
-    const uid = await this.authenticate()
-    return this.call<T>('object', 'execute_kw', [
-      this.config.database,
-      uid,
-      this.config.apiKey,
-      model,
-      method,
-      args,
-      kwargs,
-    ])
-  }
-
   async searchRead<T>(
     model: string,
     domain: unknown[][],
@@ -54,7 +48,7 @@ export class Odoo19Client {
     context: Record<string, unknown> = {},
     limit = 100
   ): Promise<T[]> {
-    return this.execute<T[]>(model, 'search_read', [domain], { fields, context, limit })
+    return this.call<T[]>(model, 'search_read', { domain, fields, context, limit })
   }
 
   async create(
@@ -62,25 +56,12 @@ export class Odoo19Client {
     values: Record<string, unknown>,
     context: Record<string, unknown>
   ): Promise<number> {
-    return this.execute<number>(model, 'create', [values], { context })
+    const ids = await this.call<number[]>(model, 'create', { vals_list: [values], context })
+    return ids[0]
   }
 
-  private async authenticate(): Promise<number> {
-    if (this.uid !== null) return this.uid
-
-    const uid = await this.call<number | false>('common', 'authenticate', [
-      this.config.database,
-      this.config.user,
-      this.config.apiKey,
-      {},
-    ])
-
-    if (!uid) throw new Error('No se pudo autenticar con Odoo 19')
-    this.uid = uid
-    return uid
-  }
-
-  private async call<T>(service: string, method: string, args: unknown[]): Promise<T> {
+  private async call<T>(model: string, method: string, params: Record<string, unknown>): Promise<T> {
+    const operation = `${model}.${method}`
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
@@ -88,55 +69,59 @@ export class Odoo19Client {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt - 1]))
       }
 
+      let response: Response
       try {
-        const response = await fetch(`${this.config.url}/jsonrpc`, {
+        response = await fetch(`${this.config.url}/json/2/${model}/${method}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'call',
-            id: ++this.requestId,
-            params: { service, method, args },
-          }),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.config.apiKey}`,
+            'X-Odoo-Database': this.config.database,
+          },
+          body: JSON.stringify(params),
         })
-
-        if (!response.ok) {
-          if (response.status >= 500) {
-            lastError = new Error(`Odoo 19 devolvió HTTP ${response.status}`)
-            continue
-          }
-          throw new Odoo19RpcError(`Odoo 19 devolvió HTTP ${response.status}`)
-        }
-
-        const data = (await response.json()) as OdooRpcResponse<T>
-        if (data.error) {
-          throw new Odoo19RpcError(data.error.data?.message ?? data.error.message ?? 'Error RPC de Odoo 19')
-        }
-        return data.result as T
-      } catch (error) {
-        if (error instanceof Odoo19RpcError) throw error
-        if (attempt === RETRY_DELAYS_MS.length) throw error
-        lastError = error instanceof Error ? error : new Error('Error de red con Odoo 19')
+      } catch (networkError) {
+        const reason = networkError instanceof Error ? networkError.message : 'error de red desconocido'
+        lastError = new Odoo19Error(`No se pudo conectar con Odoo 19 al ejecutar ${operation}: ${reason}`)
+        if (attempt === RETRY_DELAYS_MS.length) throw lastError
+        continue
       }
+
+      const bodyText = await response.text()
+
+      if (response.ok) {
+        return (bodyText ? JSON.parse(bodyText) : null) as T
+      }
+
+      const errorBody = (parseJsonSafely(bodyText) ?? {}) as Odoo19ErrorBody
+      const detail = errorBody.message ?? bodyText.slice(0, 500) ?? `HTTP ${response.status}`
+      if (errorBody.debug) console.error(`[Odoo19] ${operation} falló:\n${errorBody.debug}`)
+
+      if (response.status >= 500) {
+        lastError = new Odoo19Error(`Odoo 19 devolvió un error de servidor al ejecutar ${operation} (HTTP ${response.status}): ${detail}`)
+        if (attempt === RETRY_DELAYS_MS.length) throw lastError
+        continue
+      }
+
+      throw new Odoo19Error(describeClientError(response.status, operation, detail))
     }
 
-    throw lastError ?? new Error('No se pudo conectar con Odoo 19')
+    throw lastError ?? new Odoo19Error(`No se pudo conectar con Odoo 19 al ejecutar ${operation}`)
   }
 }
 
 export function createOdoo19Client(): Odoo19Client {
   const url = process.env.ODOO19_URL
   const database = process.env.ODOO19_DB
-  const user = process.env.ODOO19_USER
   const apiKey = process.env.ODOO19_API_KEY
   const sevillaCompany = process.env.ODOO19_SEVILLA_COMPANY
   const jerezCompany = process.env.ODOO19_JEREZ_COMPANY
 
-  if (!url || !database || !user || !apiKey || !sevillaCompany || !jerezCompany) {
+  if (!url || !database || !apiKey || !sevillaCompany || !jerezCompany) {
     throw new Error(
-      'Odoo 19 no configurado. Se requieren ODOO19_URL, ODOO19_DB, ODOO19_USER, ODOO19_API_KEY, ODOO19_SEVILLA_COMPANY y ODOO19_JEREZ_COMPANY.'
+      'Odoo 19 no configurado. Se requieren ODOO19_URL, ODOO19_DB, ODOO19_API_KEY, ODOO19_SEVILLA_COMPANY y ODOO19_JEREZ_COMPANY.'
     )
   }
 
-  return new Odoo19Client({ url, database, user, apiKey, sevillaCompany, jerezCompany })
+  return new Odoo19Client({ url: url.replace(/\/$/, ''), database, apiKey, sevillaCompany, jerezCompany })
 }

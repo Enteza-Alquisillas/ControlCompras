@@ -335,7 +335,7 @@ new-machu/
 - `SUPABASE_SERVICE_ROLE_KEY` (para importacion manual, NO requerida para el chat)
 - `OPENAI_API_KEY` (para el chat asistente IA)
 - `OPENAI_MODEL` (modelo a usar, ej: gpt-4o-mini o gpt-4o)
-- `ODOO19_URL`, `ODOO19_DB`, `ODOO19_USER`, `ODOO19_API_KEY`
+- `ODOO19_URL`, `ODOO19_DB`, `ODOO19_API_KEY` (JSON-2 con Bearer, sin usuario/uid)
 - `ODOO19_SEVILLA_COMPANY=Visueña de Material Plegable, S.L.`
 - `ODOO19_JEREZ_COMPANY=Stileum`
 
