@@ -103,7 +103,7 @@ src/features/reservations/
     └── index.ts                 # Tipos compartidos
 ```
 
-**Feature Chat (Asistente IA):**
+**Feature Chat (Asistente IA — SOLO Odoo desde el 2026-08-16):**
 ```
 src/features/chat/
 ├── components/
@@ -112,11 +112,23 @@ src/features/chat/
 │   ├── ChatMessage.tsx           # Mensaje individual + tool indicators
 │   └── ChatInput.tsx             # Input con envio
 ├── tools/
-│   └── index.ts                  # 10 tools de consulta a Supabase
+│   └── index.ts                  # 11 tools de consulta a Supabase — YA NO SE USAN EN EL CHAT
+│                                  # (desconectadas de route.ts por decision del usuario el 2026-08-16,
+│                                  # el archivo se deja intacto por si se reconecta en el futuro)
+├── mcp/                          # Odoo 19 via MCP (PRP-ODOO-003), unica fuente de datos del chat
+│   ├── odooMcpClient.ts          # createMCPClient (@ai-sdk/mcp) hacia mn_mcp_server
+│   ├── odooMcpTools.ts           # Descubre tools MCP y descarta las peligrosas (denylist)
+│   └── types.ts                  # ODOO_MCP_DENYLIST (built-in de escritura/alto riesgo)
 └── index.ts                      # Exports publicos
-src/app/api/chat/route.ts         # API endpoint (streamText + OpenAI)
-src/lib/ai/openrouter.ts          # Provider OpenAI (archivo conserva nombre legacy)
+src/app/api/chat/route.ts         # API endpoint (streamText + OpenAI), SOLO tools de Odoo MCP
+src/lib/ai/openrouter.ts          # Provider OpenAI vía OpenRouter (baseURL + openai.chat, ver Aprendizajes PRP)
 ```
+
+- El chat es exclusivamente un asistente de consulta a Odoo 19 vía MCP. No usa Supabase — se removio explicitamente el 2026-08-16 (antes combinaba ambas fuentes). Requiere `ODOO_MCP_URL`, `ODOO_MCP_API_KEY` (distinta de `ODOO19_API_KEY`) y `ODOO_MCP_DB` (instancia multi-base, va en la cabecera `X-Odoo-Database`) en `.env.local`; si faltan, el chat se queda sin tools.
+- Filtro de tools basado en denylist (`ODOO_MCP_DENYLIST`), no allowlist: cualquier Custom Tool que se defina en Odoo (Ajustes → MCP Server → Custom Tools) llega automaticamente al chat sin cambios de codigo. Solo se bloquean por nombre las tools built-in de escritura/alto riesgo.
+- **Validado end-to-end** contra el Odoo de pruebas (base `enteza_p`): busqueda de clientes, pedidos de alquiler (`sale.order`/`sale.order.line`, con reglas en el prompt para el esquema real). Ver `scripts/test-odoo-mcp.mjs` y `scripts/test-chat-*.mjs` para repetir pruebas sin pasar por el login.
+- De paso se corrigieron dos bugs preexistentes del chat: `src/lib/ai/openrouter.ts` nunca tenia `baseURL` (hablaba con OpenAI directo pese al nombre del archivo) y `route.ts` usaba la Responses API de `@ai-sdk/openai` (`openai(...)`) en vez de Chat Completions (`openai.chat(...)`), que es la que OpenRouter soporta bien para tool-calling multi-turno.
+- Fase 0 del PRP (parcheo del modulo `mn_mcp_server`) fue omitida por decision explicita del usuario el 2026-08-15: el MCP ya esta montado en un Odoo de pruebas sin los 3 parches de seguridad documentados en `AGENTS.md` §6. Pendiente antes de produccion.
 
 **Feature Odoo 19 (Alquiler nativo):**
 ```
@@ -168,7 +180,7 @@ Las reservas generan roturas de stock del **1-5 febrero 2026**:
 
 | Feature | Estado | Descripcion |
 |---------|--------|-------------|
-| Auth | PENDIENTE | Login/Logout con Supabase Email/Password |
+| Auth | COMPLETADO (verificar alcance) | Login/Logout con Supabase Email/Password vía `src/proxy.ts`; confirmado funcionando en uso real del chat el 2026-08-15. Revisar si falta UI de logout/gestión de usuarios. |
 | Import (Manual) | COMPLETADO | Server Actions para importar desde SQL Server |
 | Import (Automatico) | COMPLETADO | Servicio sync/ para cron en CPD con Docker |
 | Filtros | PENDIENTE | Búsqueda por artículo en tabla de disponibilidad |

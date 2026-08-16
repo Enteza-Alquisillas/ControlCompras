@@ -64,8 +64,21 @@ function getToolLabel(toolName: string): string {
     getPickupsByDate: 'Consultando recogidas...',
     getDemandForecast: 'Analizando demanda...',
     getPurchaseNeeds: 'Calculando necesidades de compra...',
+    getMostReservedArticles: 'Calculando ranking de articulos...',
+    odoo_search: 'Buscando en Odoo...',
+    odoo_search_count: 'Contando registros en Odoo...',
+    odoo_read: 'Leyendo datos de Odoo...',
+    odoo_search_read: 'Consultando datos en Odoo...',
+    odoo_read_group: 'Agrupando datos de Odoo...',
+    odoo_name_search: 'Buscando en Odoo...',
+    odoo_fields_get: 'Consultando esquema de Odoo...',
+    odoo_list_models: 'Consultando permisos de Odoo...',
+    odoo_get_view: 'Consultando vista de Odoo...',
+    odoo_menu_tree: 'Consultando menu de Odoo...',
+    odoo_user_context: 'Consultando usuario de Odoo...',
+    odoo_print_report: 'Generando informe de Odoo...',
   }
-  return labels[toolName] ?? `Ejecutando ${toolName}...`
+  return labels[toolName] ?? `Consultando datos (${toolName})...`
 }
 
 function FormattedText({ text, isUser }: { text: string; isUser: boolean }) {

@@ -366,4 +366,65 @@ export const chatTools = {
       }
     },
   }),
+
+  getMostReservedArticles: tool({
+    description: 'Obtiene el ranking de articulos mas reservados (por cantidad total) en un rango de fechas, de mayor a menor. Usa esto para preguntas como "que articulo se reserva mas", "articulos mas populares" o "top articulos" en un periodo.',
+    inputSchema: z.object({
+      startDate: z.string().describe('Fecha inicio en formato YYYY-MM-DD'),
+      endDate: z.string().describe('Fecha fin en formato YYYY-MM-DD'),
+      limit: z.number().optional().describe('Cuantos articulos devolver en el ranking, por defecto 10'),
+    }),
+    execute: async ({ startDate, endDate, limit = 10 }) => {
+      const supabase = createAnonClient()
+      const { data, error } = await supabase
+        .from('rentals')
+        .select('id, items:rental_items(quantity, article_id, article:articles(code, description))')
+        .gte('event_date', startDate)
+        .lte('event_date', endDate)
+        .neq('status', 'cancelled')
+
+      if (error) return { error: error.message }
+
+      type RentalWithItems = {
+        items: Array<{
+          quantity: number
+          article_id: string
+          article: { code: string | null; description: string } | null
+        }>
+      }
+
+      const totals = new Map<string, {
+        code: string | null
+        description: string
+        totalQuantity: number
+        reservationCount: number
+      }>()
+
+      for (const rental of (data as RentalWithItems[]) ?? []) {
+        for (const item of rental.items ?? []) {
+          const existing = totals.get(item.article_id)
+          if (!existing) {
+            totals.set(item.article_id, {
+              code: item.article?.code ?? null,
+              description: item.article?.description ?? 'Desconocido',
+              totalQuantity: item.quantity,
+              reservationCount: 1,
+            })
+          } else {
+            existing.totalQuantity += item.quantity
+            existing.reservationCount++
+          }
+        }
+      }
+
+      const ranking = Array.from(totals.values())
+        .sort((a, b) => b.totalQuantity - a.totalQuantity)
+        .slice(0, limit)
+
+      return {
+        totalArticlesDistinct: totals.size,
+        ranking,
+      }
+    },
+  }),
 }
