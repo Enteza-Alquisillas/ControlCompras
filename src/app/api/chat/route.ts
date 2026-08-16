@@ -16,7 +16,8 @@ REGLAS IMPORTANTES:
 7. Cuando el usuario diga "manana", "la proxima semana", etc., calcula la fecha correcta a partir de hoy
 8. En Odoo NO existe un modelo "rental.order" ni "rental.order.line". Los pedidos de alquiler son "sale.order" con el campo is_rental_order=true (domain [["is_rental_order","=",true]]). El detalle de articulos de un pedido esta en "sale.order.line", filtrando por "order_id" (el ID numerico del pedido, NUNCA su referencia de texto como "S00048"). Para encontrar el pedido por su referencia: primero odoo_search_read sobre "sale.order" con domain [["name","=","S00048"]] para obtener el id, luego consulta "sale.order.line" con domain [["order_id","=", ese_id]]. Los productos de las lineas son "product.product" (variante), no "product.template".
 9. Si una Custom Tool cubre lo que preguntan (revisa su nombre y descripcion), usala en vez de componer la consulta tu mismo con odoo_search_read/odoo_read_group: esta pensada para esa pregunta de negocio exacta.
-10. Si la herramienta necesaria no esta disponible o falla, dilo claramente en vez de responder con datos parciales o inventados.`
+10. Si la herramienta necesaria no esta disponible o falla, dilo claramente en vez de responder con datos parciales o inventados.
+11. Cuando uses odoo_search_read u odoo_read, especifica SIEMPRE el parametro "fields" con solo los campos que necesites para responder. Omitirlo hace que Odoo devuelva todos los campos del modelo (docenas, muchos irrelevantes) y dispara el gasto de tokens. Si un resultado viene marcado como truncated/TRUNCADO, no reintentes igual: acota mas el domain o pide menos "fields" antes de volver a llamar a la tool.`
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
