@@ -60,6 +60,24 @@ export class Odoo19Client {
     return ids[0]
   }
 
+  async write(
+    model: string,
+    ids: number[],
+    values: Record<string, unknown>,
+    context: Record<string, unknown>
+  ): Promise<boolean> {
+    return this.call<boolean>(model, 'write', { ids, vals: values, context })
+  }
+
+  async callMethod<T>(
+    model: string,
+    method: string,
+    ids: number[],
+    context: Record<string, unknown>
+  ): Promise<T> {
+    return this.call<T>(model, method, { ids, context })
+  }
+
   private async call<T>(model: string, method: string, params: Record<string, unknown>): Promise<T> {
     const operation = `${model}.${method}`
     let lastError: Error | null = null

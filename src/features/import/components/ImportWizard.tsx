@@ -3,11 +3,13 @@
 import { useState } from 'react'
 import { importService } from '../services/importService'
 import { ImportResult } from '../types'
+import { Odoo19InventoryPreviewModal } from './Odoo19InventoryPreviewModal'
 
 export function ImportWizard() {
     const [warehouse, setWarehouse] = useState<'SEVILLA' | 'JEREZ'>('SEVILLA')
     const [importing, setImporting] = useState<string | null>(null)
     const [results, setResults] = useState<ImportResult[]>([])
+    const [showOdoo19Inventory, setShowOdoo19Inventory] = useState(false)
 
     const runImport = async (table: 'articles' | 'customers' | 'rentals') => {
         setImporting(table)
@@ -81,7 +83,7 @@ export function ImportWizard() {
                     </div>
                 </div>
                 <div className="p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         {['articles', 'customers', 'rentals'].map((table) => (
                             <div key={table} className="border rounded-lg p-4 flex flex-col justify-between h-40">
                                 <div>
@@ -102,9 +104,26 @@ export function ImportWizard() {
                                 </button>
                             </div>
                         ))}
+
+                        <div className="border rounded-lg p-4 flex flex-col justify-between h-40">
+                            <div>
+                                <h4 className="font-medium text-gray-900">Inventario Odoo 19</h4>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Carga existencias reales (Sevilla/Jerez) como ajuste de inventario en Odoo 19, por compañía.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowOdoo19Inventory(true)}
+                                className="mt-4 w-full py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors text-sm font-medium"
+                            >
+                                Revisar y cargar
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {showOdoo19Inventory && <Odoo19InventoryPreviewModal onClose={() => setShowOdoo19Inventory(false)} />}
 
             {results.length > 0 && (
                 <div className="bg-white rounded-lg shadow">

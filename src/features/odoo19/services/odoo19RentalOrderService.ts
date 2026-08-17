@@ -1,22 +1,6 @@
-import type { Odoo19Company, Odoo19Partner, Odoo19Product, Odoo19RentalForExport, Odoo19Warehouse } from '../types'
+import type { Odoo19Partner, Odoo19Product, Odoo19RentalForExport } from '../types'
 import type { Odoo19Client } from './odoo19Client'
-
-interface Odoo19Destination {
-  code: 'VISUENA' | 'STILEUM'
-  companyId: number
-  warehouseId: number
-}
-
-function companyContext(companyId: number): Record<string, unknown> {
-  return {
-    allowed_company_ids: [companyId],
-    company_id: companyId,
-    tracking_disable: true,
-    mail_create_nolog: true,
-    mail_notrack: true,
-    mail_create_nosubscribe: true,
-  }
-}
+import { companyContext, resolveOdoo19Destination } from './odoo19WarehouseResolver'
 
 function rentalDates(deliveryDate: string, pickupDate: string): { start: string; end: string } {
   const start = `${deliveryDate} 00:00:00`
@@ -36,7 +20,7 @@ export class Odoo19RentalOrderService {
   constructor(private readonly client: Odoo19Client) {}
 
   async createRentalOrder(rental: Odoo19RentalForExport): Promise<{ orderId: number; companyCode: string }> {
-    const destination = await this.resolveDestination(rental.warehouse?.code)
+    const destination = await resolveOdoo19Destination(this.client, rental.warehouse?.code)
     const context = companyContext(destination.companyId)
     const partnerId = await this.findPartner(rental.customer?.vat, rental.customer?.name, context)
     const lines = await this.buildRentalLines(rental, context)
@@ -60,35 +44,6 @@ export class Odoo19RentalOrderService {
 
     const orderId = await this.client.create('sale.order', values, context)
     return { orderId, companyCode: destination.code }
-  }
-
-  private async resolveDestination(warehouseCode: string | undefined): Promise<Odoo19Destination> {
-    const normalized = warehouseCode?.trim().toUpperCase()
-    const mapping = normalized === 'SEVILLA'
-      ? { code: 'VISUENA' as const, companyName: this.client.companyNames.sevilla }
-      : normalized === 'JEREZ'
-        ? { code: 'STILEUM' as const, companyName: this.client.companyNames.jerez }
-        : null
-
-    if (!mapping) throw new Error(`Almacén de origen no válido para Odoo 19: ${warehouseCode ?? 'sin asignar'}`)
-
-    const companies = await this.client.searchRead<Odoo19Company>(
-      'res.company',
-      [['name', '=', mapping.companyName]],
-      ['id', 'name']
-    )
-    if (companies.length !== 1) throw new Error(`No se encontró una única compañía Odoo 19 para ${mapping.companyName}`)
-
-    const warehouses = await this.client.searchRead<Odoo19Warehouse>(
-      'stock.warehouse',
-      [['company_id', '=', companies[0].id]],
-      ['id', 'name', 'company_id'], companyContext(companies[0].id)
-    )
-    if (warehouses.length !== 1) {
-      throw new Error(`La compañía ${companies[0].name} debe tener exactamente un almacén operativo en Odoo 19`)
-    }
-
-    return { code: mapping.code, companyId: companies[0].id, warehouseId: warehouses[0].id }
   }
 
   private async findPartner(

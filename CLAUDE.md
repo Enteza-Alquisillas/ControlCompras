@@ -343,6 +343,11 @@ test('should calculate total with tax', () => {
 - **Implementación**: Consultar indicadores y filtros basándose en `event_date` para el conteo de eventos, pero usar el cálculo de rotura de stock que ya contempla los rangos completos.
 - **Aplicar en**: Vistas de calendario y resúmenes diarios.
 
+### 2026-08-17: `legacyService` (SQL Server) no soporta llamadas en paralelo
+- **Error**: `src/features/import/services/legacyService.ts` usa `sql.connect(config)` de `mssql`, que gestiona un pool de conexión **global** del proceso. Al llamar `getLegacyData(..., 'SEVILLA')` y `getLegacyData(..., 'JEREZ')` con `Promise.all`, ambas consultas compiten por el mismo pool y una puede ejecutarse contra el servidor equivocado (visto: `Invalid column name 'ID_MATERIAL_SEVILLA'` al consultar Jerez mientras el pool tenía la config de Sevilla).
+- **Fix**: Consultar Sevilla y Jerez en secuencia (`await` uno tras otro), nunca con `Promise.all`, mientras `legacyService` no use un `ConnectionPool` por llamada.
+- **Aplicar en**: Cualquier feature nueva que necesite datos de ambos almacenes legacy en la misma operación (ver `src/features/odoo19/services/odoo19InventoryService.ts`).
+
 ---
 
 *Este archivo es el cerebro de la fábrica. Cada error documentado la hace más fuerte.*

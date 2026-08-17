@@ -2,6 +2,7 @@
 export { ImportWizard } from './components/ImportWizard'
 export { ConnectionTest } from './components/ConnectionTest'
 export { LastImportIndicator } from './components/LastImportIndicator'
+export { Odoo19InventoryPreviewModal } from './components/Odoo19InventoryPreviewModal'
 
 // Actions
 export { getLastImportDates } from './actions/syncStatusActions'
