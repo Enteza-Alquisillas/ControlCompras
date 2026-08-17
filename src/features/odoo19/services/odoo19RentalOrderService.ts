@@ -166,14 +166,31 @@ export class Odoo19RentalOrderService {
 
   private async findRentalProduct(code: string, context: Record<string, unknown>): Promise<number> {
     const numericCode = code.replace(/^ART-/i, '')
+    const domain = [['default_code', 'in', [code, numericCode]]]
     const products = await this.client.searchRead<Odoo19Product>(
       'product.product',
-      [['default_code', 'in', [code, numericCode]]],
+      domain,
       ['id', 'name', 'default_code', 'rent_ok'],
       context
     )
     const product = products.find((candidate) => candidate.rent_ok)
-    if (!product) throw new Error(`Producto no encontrado o no alquilable en Odoo 19: ${code}`)
-    return product.id
+    if (product) return product.id
+
+    if (products.length > 0) {
+      throw new Error(`El producto ${code} existe en Odoo 19 pero no tiene "Puede alquilarse" (rent_ok) activado.`)
+    }
+
+    const archived = await this.client.searchRead<Odoo19Product>(
+      'product.product',
+      domain,
+      ['id', 'name', 'default_code', 'rent_ok', 'active'],
+      { ...context, active_test: false }
+    )
+    const archivedMatch = archived.find((candidate) => candidate.active === false)
+    if (archivedMatch) {
+      throw new Error(`El producto ${code} existe en Odoo 19 pero está archivado (inactivo). Reactívalo en Odoo antes de exportar.`)
+    }
+
+    throw new Error(`Producto no encontrado o no alquilable en Odoo 19: ${code}`)
   }
 }

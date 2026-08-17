@@ -57,4 +57,5 @@ export interface Odoo19Product {
   default_code: string | false
   name: string
   rent_ok: boolean
+  active?: boolean
 }
