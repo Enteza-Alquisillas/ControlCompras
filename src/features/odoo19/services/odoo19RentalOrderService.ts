@@ -50,7 +50,12 @@ export class Odoo19RentalOrderService {
       order_line: lines,
     }
 
-    if (rental.legacyId !== null) values.client_order_ref = `ENTEZA-${rental.legacyId}`
+    if (rental.legacyId !== null) {
+      // Igual que en la exportación a Odoo 15: el número de contrato del legacy
+      // se copia como número de pedido (name), no solo como referencia de cliente.
+      values.name = String(rental.legacyId)
+      values.client_order_ref = `ENTEZA-${rental.legacyId}`
+    }
     const notes = [rental.deliveryAddress && `Dirección entrega: ${rental.deliveryAddress}`, rental.notes]
       .filter((note): note is string => Boolean(note))
     if (notes.length > 0) values.note = notes.join('\n')
