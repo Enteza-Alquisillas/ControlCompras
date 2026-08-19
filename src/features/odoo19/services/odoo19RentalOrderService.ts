@@ -14,6 +14,19 @@ function normalizeVat(value: string | null | false): string | null {
   return normalized.startsWith('ES') ? normalized.slice(2) || null : normalized || null
 }
 
+/**
+ * "SOBRE VENTA..." (4502-4507): cargo que se vende, no artículo que se alquila.
+ * Se crearon en Odoo 19 como producto de servicio (rent_ok=false) porque su
+ * stock legacy era un valor centinela, no una cantidad real (ver PRP-ODOO-004).
+ */
+const SALE_ONLY_CODES = new Set(['4502', '4503', '4504', '4505', '4506', '4507'])
+
+/**
+ * Cliente genérico en Odoo 19 para reservas cuyo cliente no se pudo enlazar de
+ * forma inequívoca. Nunca se crea un partner nuevo automáticamente.
+ */
+const GENERIC_CUSTOMER_NAME = 'CLIENTES VARIOS'
+
 export class Odoo19RentalOrderService {
   private partnersByVat: Map<string, Odoo19Partner[]> | null = null
 
@@ -55,24 +68,39 @@ export class Odoo19RentalOrderService {
 
     if (normalizedVat) {
       const matches = (await this.getPartnersByVat(context)).get(normalizedVat) ?? []
-
       if (matches.length === 1) return matches[0].id
-      if (matches.length === 0) throw new Error(`No se encontró cliente en Odoo 19 con CIF/NIF ${normalizedVat}`)
-      throw new Error(`Hay varios clientes en Odoo 19 con CIF/NIF ${normalizedVat}`)
+    } else if (name) {
+      const partners = await this.client.searchRead<Odoo19Partner>(
+        'res.partner',
+        [['name', '=', name]],
+        ['id', 'name', 'vat'],
+        context
+      )
+      if (partners.length === 1) return partners[0].id
     }
 
-    if (!name) throw new Error('La reserva no tiene cliente ni CIF/NIF')
+    return this.findGenericCustomer(context)
+  }
 
-    const partners = await this.client.searchRead<Odoo19Partner>(
+  /**
+   * El cliente no se pudo enlazar de forma inequívoca (no existe, hay CIF/NIF
+   * duplicado en Odoo, o la reserva no trae CIF/NIF y el nombre no es único).
+   * En vez de bloquear el traspaso, se asigna el cliente genérico para que se
+   * revise y corrija manualmente en Odoo. Nunca se crea un partner nuevo.
+   */
+  private async findGenericCustomer(context: Record<string, unknown>): Promise<number> {
+    const generic = await this.client.searchRead<Odoo19Partner>(
       'res.partner',
-      [['name', '=', name]],
-      ['id', 'name', 'vat'],
+      [['name', '=', GENERIC_CUSTOMER_NAME]],
+      ['id', 'name'],
       context
     )
-    if (partners.length !== 1) {
-      throw new Error(`No se encontró un único cliente en Odoo 19 por nombre: ${name}. Sin CIF/NIF no se puede enlazar automáticamente.`)
+    if (generic.length === 0) {
+      throw new Error(
+        `No se encontró el cliente en Odoo 19 y tampoco existe el cliente genérico "${GENERIC_CUSTOMER_NAME}" para usarlo como respaldo.`
+      )
     }
-    return partners[0].id
+    return generic[0].id
   }
 
   private async getPartnersByVat(context: Record<string, unknown>): Promise<Map<string, Odoo19Partner[]>> {
@@ -109,17 +137,23 @@ export class Odoo19RentalOrderService {
       if (!item.article?.code) throw new Error(`Artículo sin referencia interna: ${item.article?.description ?? 'desconocido'}`)
       if (item.quantity <= 0) throw new Error(`Cantidad no válida para ${item.article.description}`)
 
-      const productId = await this.findRentalProduct(item.article.code, context)
+      const numericCode = item.article.code.replace(/^ART-/i, '')
+      const isSaleOnly = SALE_ONLY_CODES.has(numericCode)
+      const productId = await this.findRentalProduct(item.article.code, context, !isSaleOnly)
       lines.push([0, 0, {
         product_id: productId,
         product_uom_qty: item.quantity,
-        is_rental: true,
+        is_rental: !isSaleOnly,
       }])
     }
     return lines
   }
 
-  private async findRentalProduct(code: string, context: Record<string, unknown>): Promise<number> {
+  private async findRentalProduct(
+    code: string,
+    context: Record<string, unknown>,
+    requireRentOk = true
+  ): Promise<number> {
     const numericCode = code.replace(/^ART-/i, '')
     const domain = [['default_code', 'in', [code, numericCode]]]
     const products = await this.client.searchRead<Odoo19Product>(
@@ -128,8 +162,10 @@ export class Odoo19RentalOrderService {
       ['id', 'name', 'default_code', 'rent_ok'],
       context
     )
-    const product = products.find((candidate) => candidate.rent_ok)
+    const product = requireRentOk ? products.find((candidate) => candidate.rent_ok) : products[0]
     if (product) return product.id
+
+    if (!requireRentOk) throw new Error(`Producto de venta no encontrado en Odoo 19: ${code}`)
 
     if (products.length > 0) {
       throw new Error(`El producto ${code} existe en Odoo 19 pero no tiene "Puede alquilarse" (rent_ok) activado.`)
