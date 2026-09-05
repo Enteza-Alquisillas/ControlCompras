@@ -32,9 +32,11 @@ export const importService = {
 
     /**
      * Import rentals (Master-Detail)
+     * @param startDate Fecha minima (YYYY-MM-DD) del evento a importar. Si se omite, usa el rango por defecto (ultimos 3 meses).
+     * @param endDate Fecha maxima (YYYY-MM-DD, inclusive). Si se omite, no hay tope superior.
      */
-    async importRentals(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
-        return await importRentalsAction(warehouse)
+    async importRentals(warehouse: 'SEVILLA' | 'JEREZ', startDate?: string, endDate?: string): Promise<ImportResult> {
+        return await importRentalsAction(warehouse, startDate, endDate)
     },
 
     /**

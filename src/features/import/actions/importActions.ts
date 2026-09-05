@@ -82,9 +82,13 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
             return {
                 legacy_id: effectiveLegacyId,
                 warehouse_id: warehouseData.id,
-                quantity: item.EXISTENCIA,
+                // Sin filtrar por quantity > 0: si un articulo bajo a 0 (o quedo
+                // negativo por sobreventa en el sistema antiguo) el upsert debe
+                // reflejarlo igual, o una reimportacion deja el stock viejo
+                // (mayor que el real) en Supabase indefinidamente.
+                quantity: Math.max(item.EXISTENCIA ?? 0, 0),
             }
-        }).filter((s: any) => s.quantity > 0)
+        })
 
         // Obtener artículos existentes para mapeo de stock
         let existingArticles: any[] = []
@@ -126,14 +130,15 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
 }
 
 
-export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ'): Promise<ImportResult> {
+export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ', startDate?: string, endDate?: string): Promise<ImportResult> {
     const supabase = await createAdminClient()
 
     try {
-        console.log(`[Action] Iniciando importación directa para ${warehouse}...`)
+        const rangeLabel = startDate || endDate ? ` (${startDate ?? 'inicio'} a ${endDate ?? 'hoy'})` : ''
+        console.log(`[Action] Iniciando importación directa para ${warehouse}${rangeLabel}...`)
 
         // 1. Obtener datos de SQL Server (Directo, sin fetch interno)
-        const rawData = await legacyService.getLegacyData('rentals', warehouse)
+        const rawData = await legacyService.getLegacyData('rentals', warehouse, startDate, endDate)
         console.log(`[Action] Datos recibidos de SQL: ${rawData.length} líneas.`)
 
         // 2. Cargar mapeos de Supabase

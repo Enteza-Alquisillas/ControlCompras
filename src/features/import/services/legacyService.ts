@@ -24,7 +24,15 @@ const configs = {
 }
 
 export const legacyService = {
-    async getLegacyData(table: string, warehouse: 'SEVILLA' | 'JEREZ') {
+    /**
+     * @param startDate Fecha minima de FECHA_EVENTO en formato YYYY-MM-DD, solo
+     * aplica a la tabla 'rentals'. Si se omite, se usa el rango por defecto
+     * (ultimos 3 meses) para no cambiar el comportamiento de una sincronizacion normal.
+     * @param endDate Fecha maxima de FECHA_EVENTO (YYYY-MM-DD, inclusive), solo
+     * aplica a 'rentals'. Permite traer historico en tramos (por trimestre, por
+     * ejemplo) en vez de un unico import gigante.
+     */
+    async getLegacyData(table: string, warehouse: 'SEVILLA' | 'JEREZ', startDate?: string, endDate?: string) {
         const config = configs[warehouse]
         if (!config || !config.server) {
             throw new Error(`Configuración SQL Server incompleta para ${warehouse}`)
@@ -32,6 +40,7 @@ export const legacyService = {
 
         const pool = await sql.connect(config)
         try {
+            const request = pool.request()
             let query = ''
             switch (table) {
                 case 'articles':
@@ -59,8 +68,14 @@ export const legacyService = {
             `
                     break
                 case 'rentals':
+                    if (startDate) {
+                        request.input('startDate', sql.Date, startDate)
+                    }
+                    if (endDate) {
+                        request.input('endDate', sql.Date, endDate)
+                    }
                     query = `
-            SELECT 
+            SELECT
               e.ID_EVENTO,
               e.ID_CLIENTE,
               e.FECHA_EVENTO,
@@ -74,7 +89,8 @@ export const legacyService = {
               ed.NOTAS_ITEM
             FROM dbo.EVENTO_ALQUILER e
             LEFT JOIN dbo.EVENTO_ALQUILER_DETALLE ed ON e.ID_EVENTO = ed.ID_EVENTO
-            WHERE e.FECHA_EVENTO >= DATEADD(month, -3, GETDATE())
+            WHERE e.FECHA_EVENTO >= ${startDate ? '@startDate' : 'DATEADD(month, -3, GETDATE())'}
+            ${endDate ? 'AND e.FECHA_EVENTO <= @endDate' : ''}
             AND e.ID_CLIENTE NOT IN (410000, 110000)
             AND e.STATUS = 'VIGENTE'
           `
@@ -86,7 +102,7 @@ export const legacyService = {
                     throw new Error('Tabla inválida')
             }
 
-            const result = await pool.request().query(query)
+            const result = await request.query(query)
             return result.recordset
         } finally {
             await pool.close()

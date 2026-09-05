@@ -4,12 +4,16 @@ import { useState } from 'react'
 import { importService } from '../services/importService'
 import { ImportResult } from '../types'
 import { Odoo19InventoryPreviewModal } from './Odoo19InventoryPreviewModal'
+import { ResetRentalsConfirmModal } from './ResetRentalsConfirmModal'
 
 export function ImportWizard() {
     const [warehouse, setWarehouse] = useState<'SEVILLA' | 'JEREZ'>('SEVILLA')
+    const [rentalsStartDate, setRentalsStartDate] = useState('')
+    const [rentalsEndDate, setRentalsEndDate] = useState('')
     const [importing, setImporting] = useState<string | null>(null)
     const [results, setResults] = useState<ImportResult[]>([])
     const [showOdoo19Inventory, setShowOdoo19Inventory] = useState(false)
+    const [showResetConfirm, setShowResetConfirm] = useState(false)
 
     const runImport = async (table: 'articles' | 'customers' | 'rentals') => {
         setImporting(table)
@@ -20,7 +24,7 @@ export function ImportWizard() {
         } else if (table === 'customers') {
             result = await importService.importCustomers(warehouse)
         } else {
-            result = await importService.importRentals(warehouse)
+            result = await importService.importRentals(warehouse, rentalsStartDate || undefined, rentalsEndDate || undefined)
         }
 
         setResults(prev => [result, ...prev.filter(r => r.table !== table || r.error)])
@@ -28,14 +32,11 @@ export function ImportWizard() {
     }
 
     const handleResetRentals = async () => {
-        if (!confirm('¿Estás seguro de que deseas borrar TODAS las reservas? Esta acción no se puede deshacer y es necesaria para una importación limpia.')) {
-            return
-        }
-
         setImporting('reset')
         const result = await importService.resetRentals()
         setResults(prev => [result, ...prev])
         setImporting(null)
+        setShowResetConfirm(false)
 
         if (result.success) {
             alert('Reservas borradas correctamente. Ahora puedes proceder con una importación limpia.')
@@ -74,7 +75,7 @@ export function ImportWizard() {
                         </div>
 
                         <button
-                            onClick={handleResetRentals}
+                            onClick={() => setShowResetConfirm(true)}
                             disabled={importing !== null}
                             className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-md text-sm font-medium hover:bg-red-100 transition-colors disabled:opacity-50"
                         >
@@ -85,14 +86,38 @@ export function ImportWizard() {
                 <div className="p-6">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         {['articles', 'customers', 'rentals'].map((table) => (
-                            <div key={table} className="border rounded-lg p-4 flex flex-col justify-between h-40">
+                            <div key={table} className={`border rounded-lg p-4 flex flex-col justify-between ${table === 'rentals' ? 'h-56' : 'h-40'}`}>
                                 <div>
                                     <h4 className="font-medium text-gray-900">{getTableLabel(table)}</h4>
                                     <p className="text-xs text-gray-500 mt-1">
                                         {table === 'articles' && 'Sincroniza catálogo de materiales y existencias actuales.'}
                                         {table === 'customers' && 'Sincroniza base de datos de clientes corporativos.'}
-                                        {table === 'rentals' && 'Sincroniza eventos confirmados y líneas de reserva.'}
+                                        {table === 'rentals' && 'Sincroniza eventos confirmados y líneas de reserva. Por defecto, últimos 3 meses.'}
                                     </p>
+                                    {table === 'rentals' && (
+                                        <div className="mt-2 flex gap-2">
+                                            <div className="flex-1">
+                                                <label className="text-xs text-gray-600 block mb-1">Desde (opcional):</label>
+                                                <input
+                                                    type="date"
+                                                    value={rentalsStartDate}
+                                                    onChange={(e) => setRentalsStartDate(e.target.value)}
+                                                    disabled={importing !== null}
+                                                    className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-xs disabled:opacity-50"
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-xs text-gray-600 block mb-1">Hasta (opcional):</label>
+                                                <input
+                                                    type="date"
+                                                    value={rentalsEndDate}
+                                                    onChange={(e) => setRentalsEndDate(e.target.value)}
+                                                    disabled={importing !== null}
+                                                    className="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded text-xs disabled:opacity-50"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <button
@@ -124,6 +149,14 @@ export function ImportWizard() {
             </div>
 
             {showOdoo19Inventory && <Odoo19InventoryPreviewModal onClose={() => setShowOdoo19Inventory(false)} />}
+
+            {showResetConfirm && (
+                <ResetRentalsConfirmModal
+                    onConfirm={handleResetRentals}
+                    onClose={() => setShowResetConfirm(false)}
+                    isDeleting={importing === 'reset'}
+                />
+            )}
 
             {results.length > 0 && (
                 <div className="bg-white rounded-lg shadow">
