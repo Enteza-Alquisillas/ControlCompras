@@ -23,13 +23,13 @@ El MCP de Supabase de este proyecto falla a conectar con frecuencia. **No depend
 
 Si en algun momento el MCP de Supabase SI esta conectado (comprobar en el listado de tools disponibles), usar sus tools (`execute_sql`, etc.) es igual de valido y mas directo.
 
-### Trampa: la API REST limita a 1000 filas por defecto
+### Trampa: la API REST tiene un tope de filas por select() sin paginar
 
-Un `.select('*')` sin `.range()` ni `head:true` se trunca silenciosamente a 1000 filas — no da error, simplemente devuelve menos de lo que hay. Para:
+Un `.select('*')` sin `.range()` ni `head:true` se trunca silenciosamente — no da error, simplemente devuelve menos de lo que hay. **El tope es configuracion de proyecto (Settings > API > Max Rows), no un numero fijo: en este proyecto se verifico en 3000, pero no lo des por hecho sin comprobarlo** (`select('id')` sobre una tabla de la que ya sabes el count real por otra via, y compara). Para:
 - **Contar** (cuantos eventos, cuantos clientes...): usa `.select('col', { count: 'exact', head: true })`, nunca cuentes el `.length` de un array traido sin paginar.
-- **Traer todo** (para agregaciones en JS que un RPC no cubre): pagina con `.range(offset, offset+999)` en bucle.
+- **Traer todo para agregar en JS** (ranking de articulos/clientes, forecast...): pagina siempre con `.range(offset, offset+999)` en bucle hasta que una pagina vuelva con menos filas que el tamaño pedido — sin asumir que el rango de fechas "seguro" cabe de sobra. Con 2+ años de historico ya importado (>5000 rentals en total), cualquier consulta de mas de un año puede superar el tope. Ver `fetchAllRentalsInRange` en `src/features/chat/tools/index.ts` para el patron ya implementado.
 
-Esto no es teorico: se detecto en produccion durante el desarrollo de esta skill (un desglose por almacen salio mal por este motivo exacto).
+Esto no es teorico: se detecto en produccion durante el desarrollo de esta skill (un desglose por almacen salio mal por este motivo exacto), y `getMostReservedArticles`/`getDemandForecast` tuvieron este mismo bug hasta que se corrigieron a paginar.
 
 ## Esquema y reglas de negocio
 
@@ -63,9 +63,10 @@ Antes de comparar "este año vs el anterior" o dar un total del mes/año en curs
 | "¿Que articulo se alquila mas?" | Sumar `rental_items.quantity` agrupado por `article_id` en el rango, excluyendo `customers.is_internal`. Ver `getMostReservedArticles` en `src/features/chat/tools/index.ts` — logica ya resuelta y probada, adaptala en vez de reescribirla. |
 | "¿Hay roturas de stock en [rango]?" / "¿que falta comprar?" | RPC `get_stock_breakages_optimized`. Ver `getStockBreakages`/`getPurchaseNeeds` en `src/features/chat/tools/index.ts`. |
 | "Estacionalidad" / "compara con el año pasado" | Contar por mes via `count:'exact', head:true` sobre `event_date`, agrupando en el propio bucle de queries (una query por mes es mas simple y fiable que agrupar en JS con datos sin paginar). Aplica las reglas de "Estacionalidad y comparativas". |
-| "Historial de un cliente" | Buscar en `customers` (excluir internos) por nombre/telefono/email, luego `rentals` por `customer_id`. Ver `searchCustomers`/`getCustomerRentalHistory`. |
+| "Historial de un cliente concreto" | Buscar en `customers` (excluir internos) por nombre/telefono/email, luego `rentals` por `customer_id`. Ver `searchCustomers`/`getCustomerRentalHistory`. |
+| "¿Que cliente tiene mas pedidos?" / ranking de clientes | Contar `rentals` agrupado por `customer_id` en el rango, excluyendo internos, paginando (ver trampa de arriba). Ver `getTopCustomers` en `src/features/chat/tools/index.ts` — NO uses `getCustomerRentalHistory` para esto, esa es solo para un cliente ya identificado. |
 | "Busca el contrato/pedido numero X" | Filtrar `rentals` por `legacy_id`. Ver `searchRentalByContract`. |
-| "¿Cuantos eventos hay/habra en [fecha]?" | `rentals` filtrado por `event_date`, excluyendo internos y `status='cancelled'` si aplica (en la practica no hay filas asi, pero no cuesta nada dejarlo). |
+| "¿Cuantos eventos hay/habra en [fecha o año]?" | `rentals` filtrado por `event_date`. Si piden un año completo, usa el rango completo (1 ene - 31 dic), no lo recortes a "hasta hoy" sin que te lo pidan explicitamente — y si el rango incluye fechas futuras, avisa de que es provisional (ver "Estacionalidad y comparativas"). |
 | "Prevision de demanda por semana/mes" | Ver `getDemandForecast` en `src/features/chat/tools/index.ts`. |
 | "Facturacion / ingresos / precio de X" | **No respondible desde este esquema** (ver arriba). Decirlo, no aproximar. |
 

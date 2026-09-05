@@ -83,6 +83,50 @@ async function callRpc<T>(
   return (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: T[] | null; error: { message: string } | null }> }).rpc(fn, args)
 }
 
+// La API REST de Supabase acota un select() sin range() a un maximo de filas
+// (verificado en este proyecto: 3000; es configuracion de proyecto, no un
+// estandar fijo — no asumir el numero sin comprobarlo). Con >2 años de
+// historico ya importado, cualquier consulta de rango amplio (todo un año o
+// mas) puede superarlo y truncarse en silencio sin dar error. Se pagina
+// siempre en bloques de 1000 para que el resultado sea correcto sin importar
+// el tamaño del rango.
+const PAGE_SIZE = 1000
+
+type RentalRangeRow = {
+  id: string
+  event_date: string | null
+  customer_id: string
+  customer: { name: string | null; is_internal: boolean | null } | null
+  items: Array<{ quantity: number; article_id: string; article: { code: string | null; description: string } | null }>
+}
+
+async function fetchAllRentalsInRange(
+  supabase: ReturnType<typeof createAnonClient>,
+  startDate: string,
+  endDate: string,
+  select: string,
+): Promise<RentalRangeRow[]> {
+  const rows: RentalRangeRow[] = []
+  let offset = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('rentals')
+      .select(select)
+      .gte('event_date', startDate)
+      .lte('event_date', endDate)
+      .neq('status', 'cancelled')
+      .range(offset, offset + PAGE_SIZE - 1)
+
+    if (error) throw new Error(error.message)
+
+    const page = (data as unknown as RentalRangeRow[]) ?? []
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+  return rows
+}
+
 export const chatTools = {
   searchArticles: tool({
     description: 'Busca articulos por nombre, codigo o familia. Usa esto primero para encontrar el ID de un articulo antes de consultar disponibilidad.',
@@ -391,23 +435,19 @@ export const chatTools = {
     }),
     execute: async ({ startDate, endDate }) => {
       const supabase = createAnonClient()
-      const { data, error } = await supabase
-        .from('rentals')
-        .select('event_date, delivery_date, pickup_date, customer:customers(is_internal)')
-        .not('event_date', 'is', null)
-        .gte('event_date', startDate)
-        .lte('event_date', endDate)
-        .neq('status', 'cancelled')
+      let allRows: RentalRangeRow[]
+      try {
+        allRows = await fetchAllRentalsInRange(supabase, startDate, endDate, 'id, event_date, customer:customers(name, is_internal)')
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : 'Error desconocido' }
+      }
 
-      if (error) return { error: error.message }
-
-      const rentals = ((data as unknown as Array<{ event_date: string; customer: CustomerRef | null }>) ?? [])
-        .filter((r) => !r.customer?.is_internal)
+      const rentals = allRows.filter((r) => !r.customer?.is_internal && r.event_date)
 
       // Group by week
       const weeks = new Map<string, number>()
       for (const rental of rentals) {
-        const date = new Date(rental.event_date)
+        const date = new Date(rental.event_date as string)
         const weekStart = new Date(date)
         weekStart.setDate(date.getDate() - date.getDay() + 1) // Monday
         const weekKey = weekStart.toISOString().split('T')[0]
@@ -487,14 +527,15 @@ export const chatTools = {
     }),
     execute: async ({ startDate, endDate, limit = 10 }) => {
       const supabase = createAnonClient()
-      const { data, error } = await supabase
-        .from('rentals')
-        .select('id, customer:customers(is_internal), items:rental_items(quantity, article_id, article:articles(code, description))')
-        .gte('event_date', startDate)
-        .lte('event_date', endDate)
-        .neq('status', 'cancelled')
-
-      if (error) return { error: error.message }
+      let rentals: RentalRangeRow[]
+      try {
+        rentals = await fetchAllRentalsInRange(
+          supabase, startDate, endDate,
+          'id, customer:customers(is_internal), items:rental_items(quantity, article_id, article:articles(code, description))',
+        )
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : 'Error desconocido' }
+      }
 
       const totals = new Map<string, {
         code: string | null
@@ -502,11 +543,6 @@ export const chatTools = {
         totalQuantity: number
         reservationCount: number
       }>()
-
-      const rentals = (data as unknown as Array<{
-        customer: CustomerRef | null
-        items: Array<{ quantity: number; article_id: string; article: ArticleRef | null }>
-      }>) ?? []
 
       for (const rental of rentals.filter((r) => !r.customer?.is_internal)) {
         for (const item of rental.items ?? []) {
@@ -531,6 +567,44 @@ export const chatTools = {
 
       return {
         totalArticlesDistinct: totals.size,
+        ranking,
+      }
+    },
+  }),
+
+  getTopCustomers: tool({
+    description: 'Obtiene el ranking de clientes con mas pedidos/eventos (por numero de reservas) en un rango de fechas, de mayor a menor. Usa esto para preguntas como "que cliente tiene mas pedidos", "ranking de clientes", "cliente mas frecuente" o "quien nos compra mas". Excluye automaticamente los prestamos internos entre almacenes.',
+    inputSchema: z.object({
+      startDate: z.string().describe('Fecha inicio en formato YYYY-MM-DD'),
+      endDate: z.string().describe('Fecha fin en formato YYYY-MM-DD'),
+      limit: z.number().optional().describe('Cuantos clientes devolver en el ranking, por defecto 10'),
+    }),
+    execute: async ({ startDate, endDate, limit = 10 }) => {
+      const supabase = createAnonClient()
+      let rentals: RentalRangeRow[]
+      try {
+        rentals = await fetchAllRentalsInRange(supabase, startDate, endDate, 'id, customer_id, customer:customers(name, is_internal)')
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : 'Error desconocido' }
+      }
+
+      const totals = new Map<string, { name: string; orderCount: number }>()
+
+      for (const rental of rentals.filter((r) => !r.customer?.is_internal)) {
+        const existing = totals.get(rental.customer_id)
+        if (!existing) {
+          totals.set(rental.customer_id, { name: rental.customer?.name ?? 'Desconocido', orderCount: 1 })
+        } else {
+          existing.orderCount++
+        }
+      }
+
+      const ranking = Array.from(totals.values())
+        .sort((a, b) => b.orderCount - a.orderCount)
+        .slice(0, limit)
+
+      return {
+        totalCustomersDistinct: totals.size,
         ranking,
       }
     },
