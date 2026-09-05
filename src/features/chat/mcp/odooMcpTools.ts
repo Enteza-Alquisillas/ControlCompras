@@ -9,6 +9,22 @@ interface OdooMcpToolsResult {
 
 const NOOP_CLOSE = async () => {}
 
+// client.tools() no acepta un timeout por parametro (a diferencia de
+// listTools/callTool). Si la conexion se queda a medias tras el handshake
+// inicial, este backstop evita que el chat se cuelgue esperando la lista de
+// tools para siempre.
+const LIST_TOOLS_TIMEOUT_MS = 10_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}: timeout tras ${ms}ms`)), ms)
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value) },
+      (error) => { clearTimeout(timer); reject(error) },
+    )
+  })
+}
+
 // Techo de filas que se deja pasar al modelo en un solo resultado de tool.
 // mn_mcp_server no acota esto por si mismo: `odoo_search_read`/`odoo_search`
 // aceptan `limit` pero Odoo no le pone techo si el modelo pide de mas (o lo
@@ -172,7 +188,7 @@ export async function getOdooMcpTools(): Promise<OdooMcpToolsResult> {
   }
 
   try {
-    const allTools = await client.tools()
+    const allTools = await withTimeout(client.tools(), LIST_TOOLS_TIMEOUT_MS, 'client.tools()')
 
     const allowedTools = Object.fromEntries(
       Object.entries(allTools)

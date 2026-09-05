@@ -33,18 +33,25 @@ export function ChatPage() {
   const [source, setSource] = useState<ChatSource>(DEFAULT_CHAT_SOURCE)
   const transport = useMemo(() => new DefaultChatTransport({ api: '/api/chat' }), [])
 
-  const { messages, sendMessage, status, setMessages } = useChat({ transport })
+  const { messages, sendMessage, status, setMessages, error, clearError, regenerate } = useChat({ transport })
 
   const isLoading = status === 'streaming' || status === 'submitted'
 
   const handleSend = (text: string) => {
+    clearError()
     sendMessage({ text }, { body: { source } })
+  }
+
+  const handleRetry = () => {
+    clearError()
+    regenerate()
   }
 
   const handleSourceChange = (nextSource: ChatSource) => {
     if (nextSource === source) return
     setSource(nextSource)
     setMessages([])
+    clearError()
   }
 
   return (
@@ -77,6 +84,19 @@ export function ChatPage() {
                 {suggestion}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="mx-4 mb-2 flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <span>El asistente no pudo responder: {error.message}</span>
+            <button
+              onClick={handleRetry}
+              className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors"
+            >
+              Reintentar
+            </button>
           </div>
         )}
 
