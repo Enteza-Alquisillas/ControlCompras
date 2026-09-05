@@ -83,6 +83,171 @@ async function callRpc<T>(
   return (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: T[] | null; error: { message: string } | null }> }).rpc(fn, args)
 }
 
+// -----------------------------------------------------------------------
+// queryTable: consulta flexible de solo lectura para razonamiento ad hoc
+// (preguntas "que pasaria si" de logistica que no encajan en ninguna tool
+// fija: mover una recogida para evitar una rotura, cruzar disponibilidad
+// entre varios articulos, etc.). Deliberadamente NO es SQL crudo: tabla,
+// columnas, relaciones embebidas y operadores estan en listas blancas, asi
+// que no hay superficie de inyeccion y no puede tocar columnas/tablas fuera
+// de esta lista aunque el modelo lo intente. El calculo/razonamiento sobre
+// los datos crudos lo hace el propio modelo en varias llamadas encadenadas,
+// no esta tool.
+// -----------------------------------------------------------------------
+
+const QUERYABLE_TABLES = ['rentals', 'rental_items', 'articles', 'customers', 'article_stock', 'warehouses'] as const
+type QueryableTable = (typeof QUERYABLE_TABLES)[number]
+
+const TABLE_COLUMNS: Record<QueryableTable, readonly string[]> = {
+  rentals: ['id', 'legacy_id', 'customer_id', 'warehouse_id', 'event_date', 'delivery_date', 'pickup_date', 'delivery_address', 'notes', 'status'],
+  rental_items: ['id', 'rental_id', 'article_id', 'quantity', 'notes'],
+  articles: ['id', 'legacy_id', 'code', 'description', 'family', 'is_active'],
+  customers: ['id', 'legacy_id', 'name', 'phone', 'email', 'address', 'vat', 'is_internal'],
+  article_stock: ['id', 'article_id', 'warehouse_id', 'quantity'],
+  warehouses: ['id', 'code', 'name'],
+}
+
+// Relaciones embebidas permitidas por tabla: clave = nombre que usa el
+// modelo, valor = fragmento real de select() de supabase-js. Fijas a mano
+// (no generadas desde el nombre) para que no se puedan pedir columnas fuera
+// de esta lista via el embed.
+const TABLE_EMBEDS: Record<QueryableTable, Record<string, string>> = {
+  rentals: {
+    customer: 'customer:customers(name, phone, email, is_internal)',
+    warehouse: 'warehouse:warehouses(name, code)',
+    items: 'items:rental_items(quantity, article_id, notes, article:articles(code, description, family))',
+  },
+  rental_items: {
+    article: 'article:articles(code, description, family)',
+    rental: 'rental:rentals(legacy_id, event_date, delivery_date, pickup_date, status, customer:customers(name, is_internal))',
+  },
+  article_stock: {
+    article: 'article:articles(code, description, family)',
+    warehouse: 'warehouse:warehouses(name, code)',
+  },
+  articles: {},
+  customers: {},
+  warehouses: {},
+}
+
+const FILTER_OPERATORS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in', 'like', 'ilike', 'is'] as const
+type FilterOperator = (typeof FILTER_OPERATORS)[number]
+
+const DEFAULT_QUERY_LIMIT = 200
+const MAX_QUERY_LIMIT = 1000
+
+interface QueryFilter {
+  column: string
+  operator: FilterOperator
+  value: string | number | boolean | Array<string | number>
+}
+
+// Quita filas cuyo cliente embebido sea interno, sin que el modelo tenga
+// que acordarse de pedirlo: es la misma regla de negocio que ya aplican a
+// mano el resto de tools sobre `rentals`, aqui se fuerza en el propio
+// backstop de seguridad en vez de confiar en el prompt.
+function stripInternalCustomers(rows: Array<Record<string, unknown>>): { rows: Array<Record<string, unknown>>; excluded: number } {
+  let excluded = 0
+  const filtered = rows.filter((row) => {
+    const customer = row.customer as { is_internal?: boolean } | undefined
+    const rental = row.rental as { customer?: { is_internal?: boolean } } | undefined
+    const isInternal = customer?.is_internal === true || rental?.customer?.is_internal === true
+    if (isInternal) excluded++
+    return !isInternal
+  })
+  return { rows: filtered, excluded }
+}
+
+const queryTable = tool({
+  description: `Consulta de solo lectura de grano fino sobre una tabla de Supabase, para razonar sobre preguntas de logistica que las demas tools no cubren directamente (ej. "si adelanto la recogida de tal pedido, se resuelve la rotura de tal fecha", cruces de disponibilidad entre varios articulos/almacenes, o cualquier analisis ad hoc). No hace agregaciones (SUM/COUNT): trae filas y razona sobre ellas tu mismo en varios pasos.
+
+Tablas y columnas disponibles:
+- rentals: id, legacy_id, customer_id, warehouse_id, event_date, delivery_date, pickup_date, delivery_address, notes, status. Embeds: customer, warehouse, items.
+- rental_items: id, rental_id, article_id, quantity, notes. Embeds: article, rental.
+- articles: id, legacy_id, code, description, family, is_active.
+- customers: id, legacy_id, name, phone, email, address, vat, is_internal.
+- article_stock: id, article_id, warehouse_id, quantity. Embeds: article, warehouse.
+- warehouses: id, code, name.
+
+Las filas de "rentals"/"rental_items" cuyo cliente (directo o via el embed "rental") sea interno (traspaso Sevilla<->Jerez) se excluyen SIEMPRE automaticamente si pides el embed "customer"/"rental" — pidelo si vas a listar pedidos para no perder esa proteccion.`,
+  inputSchema: z.object({
+    table: z.enum(QUERYABLE_TABLES).describe('Tabla a consultar'),
+    columns: z.array(z.string()).min(1).describe('Columnas planas de esa tabla a devolver (de la lista permitida en la descripcion)'),
+    embeds: z.array(z.string()).optional().describe('Nombres de relaciones a incluir (de la lista permitida en la descripcion para esa tabla)'),
+    filters: z.array(z.object({
+      column: z.string().describe('Columna plana de la tabla sobre la que filtrar'),
+      operator: z.enum(FILTER_OPERATORS),
+      value: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]).describe('Para "in" usa un array; para el resto, un valor simple'),
+    })).optional().describe('Condiciones AND a aplicar'),
+    orderBy: z.object({
+      column: z.string(),
+      ascending: z.boolean().optional(),
+    }).optional(),
+    limit: z.number().optional().describe(`Maximo de filas a devolver, por defecto ${DEFAULT_QUERY_LIMIT}, tope duro ${MAX_QUERY_LIMIT}. Si el resultado viene truncado, acota mas con filters en vez de pedir mas limit.`),
+  }),
+  execute: async ({ table, columns, embeds, filters, orderBy, limit }) => {
+    const allowedColumns = TABLE_COLUMNS[table as QueryableTable]
+    const allowedEmbeds = TABLE_EMBEDS[table as QueryableTable]
+
+    const badColumns = columns.filter((c) => !allowedColumns.includes(c))
+    if (badColumns.length > 0) {
+      return { error: `Columnas no permitidas para "${table}": ${badColumns.join(', ')}. Columnas validas: ${allowedColumns.join(', ')}` }
+    }
+
+    const embedFragments: string[] = []
+    for (const embedName of embeds ?? []) {
+      const fragment = allowedEmbeds[embedName]
+      if (!fragment) {
+        return { error: `Embed "${embedName}" no valido para "${table}". Embeds validos: ${Object.keys(allowedEmbeds).join(', ') || '(ninguno)'}` }
+      }
+      embedFragments.push(fragment)
+    }
+
+    for (const f of filters ?? []) {
+      if (!allowedColumns.includes(f.column)) {
+        return { error: `No se puede filtrar por "${f.column}" en "${table}". Solo se admite filtrar por columnas planas: ${allowedColumns.join(', ')}` }
+      }
+    }
+
+    if (orderBy && !allowedColumns.includes(orderBy.column)) {
+      return { error: `No se puede ordenar por "${orderBy.column}" en "${table}". Columnas validas: ${allowedColumns.join(', ')}` }
+    }
+
+    const effectiveLimit = Math.min(limit && limit > 0 ? limit : DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)
+    const selectClause = [...columns, ...embedFragments].join(', ')
+
+    const supabase = createAnonClient()
+    let query = supabase.from(table as QueryableTable).select(selectClause).limit(effectiveLimit + 1)
+
+    for (const f of filters ?? []) {
+      query = (query as unknown as Record<FilterOperator, (col: string, val: unknown) => typeof query>)[f.operator](f.column, f.value)
+    }
+    if (orderBy) {
+      query = query.order(orderBy.column, { ascending: orderBy.ascending ?? true }) as typeof query
+    }
+
+    const { data, error } = await query
+
+    if (error) return { error: error.message }
+
+    const rawRows = (data as unknown as Array<Record<string, unknown>>) ?? []
+    const truncated = rawRows.length > effectiveLimit
+    const pageRows = truncated ? rawRows.slice(0, effectiveLimit) : rawRows
+
+    const { rows, excluded } = stripInternalCustomers(pageRows)
+
+    return {
+      rows,
+      rowCount: rows.length,
+      internalCustomersExcluded: excluded || undefined,
+      truncated: truncated || undefined,
+      note: truncated
+        ? `Hay mas filas de las devueltas (limite ${effectiveLimit}). Acota mas con "filters" (fechas, ids, etc.) en vez de subir "limit".`
+        : undefined,
+    }
+  },
+})
+
 // La API REST de Supabase acota un select() sin range() a un maximo de filas
 // (verificado en este proyecto: 3000; es configuracion de proyecto, no un
 // estandar fijo — no asumir el numero sin comprobarlo). Con >2 años de
@@ -128,6 +293,8 @@ async function fetchAllRentalsInRange(
 }
 
 export const chatTools = {
+  queryTable,
+
   searchArticles: tool({
     description: 'Busca articulos por nombre, codigo o familia. Usa esto primero para encontrar el ID de un articulo antes de consultar disponibilidad.',
     inputSchema: z.object({

@@ -4,7 +4,10 @@ import { getOdooMcpTools } from '@/features/chat/mcp/odooMcpTools'
 import { chatTools } from '@/features/chat/tools'
 import { DEFAULT_CHAT_SOURCE, type ChatSource } from '@/features/chat/types'
 
-export const maxDuration = 60
+// Elevado de 60 a 120 al subir el presupuesto de pasos de razonamiento
+// (stepCountIs) para preguntas de logistica que encadenan varias llamadas a
+// queryTable antes de responder.
+export const maxDuration = 120
 
 const TODAY = () => new Date().toISOString().split('T')[0]
 
@@ -38,7 +41,13 @@ REGLAS IMPORTANTES:
 10. La disponibilidad de un articulo en una fecha se calcula como stock_total menos lo comprometido por reservas cuyo rango entrega-recogida (delivery_date..pickup_date) cubre esa fecha. Si "available" es negativo, hay rotura de stock
 11. Estos datos son una foto migrada del sistema antiguo: no reflejan pedidos creados directamente en Odoo 19 despues de la migracion. Si el usuario pregunta por algo muy reciente y esta fuente no lo tiene, dilo claramente y sugiere cambiar a la fuente "Odoo" en el selector del asistente
 12. Para "que cliente tiene mas pedidos", "ranking de clientes" o comparar clientes entre si, usa getTopCustomers. getCustomerRentalHistory es solo para el historial de UN cliente concreto ya identificado, no sirve para comparar o rankear
-13. Cuando pidan el total de un AÑO COMPLETO (ej. "pedidos de 2026"), usa el rango completo (1 de enero a 31 de diciembre de ese año), no lo recortes a "hasta hoy" salvo que el usuario pida explicitamente "en lo que va de año" o similar. Este es un negocio de reservas a futuro: si el rango incluye fechas posteriores a hoy, indica claramente que la cifra es provisional porque siguen entrando reservas para esas fechas`
+13. Cuando pidan el total de un AÑO COMPLETO (ej. "pedidos de 2026"), usa el rango completo (1 de enero a 31 de diciembre de ese año), no lo recortes a "hasta hoy" salvo que el usuario pida explicitamente "en lo que va de año" o similar. Este es un negocio de reservas a futuro: si el rango incluye fechas posteriores a hoy, indica claramente que la cifra es provisional porque siguen entrando reservas para esas fechas
+14. Para preguntas de logistica complejas que las demas tools no cubren directamente (simulaciones "que pasaria si", cruces entre varios articulos/almacenes/clientes, cualquier analisis ad hoc), usa "queryTable": consulta de solo lectura de grano fino sobre una tabla concreta (tabla/columnas/relaciones en lista blanca, sin agregados — trae filas y razona sobre ellas tu mismo encadenando varias llamadas). No tiene atajos magicos: la inteligencia de la respuesta esta en como combinas los datos que trae, no en la tool.
+    Ejemplo de razonamiento tipico ("si recogemos el articulo X un dia antes, se evita la rotura del dia D?"):
+    a) Localiza la rotura con getStockBreakages/checkAvailability: articulo, dia D, deficit.
+    b) Con queryTable sobre "rental_items" (filter article_id=eq.<id>, embed "rental") encuentra los pedidos que tienen ese articulo con pickup_date posterior a D pero delivery_date <= D (material ya entregado, pendiente de recoger, que "estorba" ese dia sin necesidad).
+    c) Suma la quantity de esos candidatos: si moviendo la recogida de uno o varios de ellos a D o antes se cubre el deficit, esa es la sugerencia (indicando pedido, cliente y cantidad exacta que liberaria).
+    d) Deja claro que es una SUGERENCIA para que un humano decida y ejecute el cambio manualmente: no tienes ninguna tool de escritura, no puedes mover la fecha tu mismo.`
 
 export async function POST(req: Request) {
   const { messages, source } = await req.json()
@@ -50,7 +59,10 @@ export async function POST(req: Request) {
       system: MACHU_SYSTEM_PROMPT,
       messages: await convertToModelMessages(messages),
       tools: chatTools,
-      stopWhen: stepCountIs(8),
+      // Elevado de 8: las preguntas de logistica con queryTable encadenan
+      // varias llamadas (localizar rotura -> buscar candidatos -> razonar)
+      // antes de tener suficiente para responder.
+      stopWhen: stepCountIs(20),
     })
 
     return result.toUIMessageStreamResponse()
@@ -63,7 +75,7 @@ export async function POST(req: Request) {
     system: ODOO_SYSTEM_PROMPT,
     messages: await convertToModelMessages(messages),
     tools: odooTools,
-    stopWhen: stepCountIs(8),
+    stopWhen: stepCountIs(12),
     onFinish: async () => {
       await closeOdooMcp()
     },

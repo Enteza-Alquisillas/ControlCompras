@@ -21,7 +21,7 @@ Fuente de verdad: `src/lib/supabase/database.types.ts` (tipos generados) + verif
 | `legacy_id` | int | `ID_CLIENTE` en origen |
 | `name`, `phone`, `email`, `address` | text | |
 | `vat` | text | NIF/CIF normalizado (sin prefijo "ES") |
-| `is_internal` | bool | **true = traspaso de material entre almacenes, NO es un cliente real.** legacy_id conocidos: 410000 (Sevilla->Jerez), 110000 (Jerez->Sevilla). Excluir siempre de conteos de clientes/eventos reales. |
+| `is_internal` | bool | **true = traspaso de material entre almacenes, NO es un cliente real.** legacy_id conocidos: 410000 "ENTEZA JEREZ" (Sevilla->Jerez), 110000 "ENTEZA SEVILLA" (Jerez->Sevilla). **Verificado 2026-09: esta columna vale `false` para TODAS las filas, incluidas estas dos** — nunca se ha puesto a `true` en ningun import (`transformService.transformCustomers` no la setea). No es un bug con impacto real: `importRentalsAction` excluye estos dos `ID_CLIENTE` antes de crear la fila de `rentals` (ver `EXCLUDED_CUSTOMERS` en `importActions.ts`), asi que hoy no existe ningun `rentals.customer_id` que apunte a ellos (verificado por consulta directa). Pero el filtro `is_internal=true` que usan todas las tools de esta skill es, en la practica, un no-op — la proteccion real esta en la importacion, no en esta columna. Si en el futuro se importan datos de otra forma (otro almacen, otro proceso) sin ese mismo filtro por `ID_CLIENTE`, esta columna NO va a salvarte. Seria mas robusto hacer `UPDATE customers SET is_internal = true WHERE legacy_id IN (410000, 110000)` una vez y asegurarse de que el import la setea, en vez de confiar en que la exclusion aguas arriba siga siendo siempre correcta. |
 
 ### `rentals` — cabecera de pedido/evento ("contrato")
 | Columna | Tipo | Notas |
