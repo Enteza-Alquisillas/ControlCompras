@@ -2,9 +2,85 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { createAnonClient } from '@/lib/supabase/server'
 
-// Type helper for RPC calls on the Supabase client
-interface RpcClient {
-  rpc: (fn: string, args: Record<string, unknown>) => { range: (from: number, to: number) => Promise<{ data: unknown; error: { message: string } | null }> } & Promise<{ data: unknown; error: { message: string } | null }>
+// El generador de tipos de Supabase (database.types.ts) no trae el marcador
+// que esta version de @supabase/supabase-js necesita para inferir selects
+// con relaciones embebidas (customer:customers(...), items:rental_items(...))
+// ni `.rpc()`: siempre caen a `never`. El resto del proyecto ya convive con
+// esto tipando a mano en el punto de uso (ver reservationsService.ts); se
+// sigue el mismo patron aqui en vez de pelear con el inferidor.
+
+interface CustomerRef {
+  name: string | null
+  phone: string | null
+  email?: string | null
+  address?: string | null
+  vat?: string | null
+  is_internal: boolean | null
+}
+
+interface ArticleRef {
+  code: string | null
+  description: string
+  family?: string | null
+}
+
+interface RentalItemRef {
+  quantity: number
+  notes?: string | null
+  article_id?: string
+  article: ArticleRef | null
+}
+
+interface WarehouseRef {
+  name: string
+  code?: string
+}
+
+interface RentalRow {
+  id: string
+  legacy_id: number | null
+  event_date: string | null
+  delivery_date: string
+  pickup_date: string
+  delivery_address: string | null
+  notes: string | null
+  status: string | null
+  warehouse: WarehouseRef | null
+  customer: CustomerRef | null
+  items: RentalItemRef[]
+}
+
+interface ArticleReservationRow {
+  reservation_date: string
+  rental_id: string
+  rental_legacy_id: number | null
+  customer_name: string
+  quantity: number
+  delivery_date: string
+  pickup_date: string
+  delivery_address: string | null
+  event_date: string
+}
+
+interface StockBreakageRow {
+  article_id: string
+  article_code: string | null
+  article_description: string
+  article_family: string | null
+  breakage_date: string
+  total_stock: number
+  committed: number
+  available: number
+  stock_sevilla: number
+  stock_jerez: number
+}
+
+async function callRpc<T>(
+  supabase: ReturnType<typeof createAnonClient>,
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<{ data: T[] | null; error: { message: string } | null }> {
+  return (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: T[] | null; error: { message: string } | null }> }).rpc(fn, args)
 }
 
 export const chatTools = {
@@ -28,7 +104,7 @@ export const chatTools = {
   }),
 
   searchCustomers: tool({
-    description: 'Busca clientes por nombre, email o telefono.',
+    description: 'Busca clientes reales por nombre, email o telefono. Excluye automaticamente los prestamos internos entre almacenes (Sevilla<->Jerez), que no son clientes.',
     inputSchema: z.object({
       query: z.string().describe('Texto de busqueda (nombre, email o telefono del cliente)'),
     }),
@@ -36,12 +112,62 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('customers')
-        .select('id, name, phone, email, address')
+        .select('id, name, phone, email, address, vat')
         .or(`name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
+        .eq('is_internal', false)
         .limit(20)
 
       if (error) return { error: error.message }
       return { customers: data, count: data?.length ?? 0 }
+    },
+  }),
+
+  searchRentalByContract: tool({
+    description: 'Busca un pedido/reserva por su numero de contrato del sistema antiguo (legacy_id). Usa esto cuando el usuario mencione un numero de contrato o folio (ej. "contrato 41252760").',
+    inputSchema: z.object({
+      contractNumber: z.number().describe('Numero de contrato del sistema antiguo (legacy_id)'),
+    }),
+    execute: async ({ contractNumber }) => {
+      const supabase = createAnonClient()
+      const { data, error } = await supabase
+        .from('rentals')
+        .select(
+          'id, legacy_id, event_date, delivery_date, pickup_date, delivery_address, notes, status, warehouse:warehouses(name, code), customer:customers(name, phone, email, vat), items:rental_items(quantity, notes, article:articles(code, description, family))',
+        )
+        .eq('legacy_id', contractNumber)
+        .maybeSingle()
+
+      if (error) return { error: error.message }
+      if (!data) return { found: false, message: `No se encontro ningun contrato con numero ${contractNumber}` }
+      return { found: true, rental: data as unknown as RentalRow }
+    },
+  }),
+
+  getCustomerRentalHistory: tool({
+    description: 'Obtiene el historial de pedidos/reservas de un cliente concreto. Usa searchCustomers primero para obtener el customerId si solo tienes el nombre.',
+    inputSchema: z.object({
+      customerId: z.string().describe('ID del cliente (UUID). Usa searchCustomers primero si solo tienes el nombre.'),
+      startDate: z.string().optional().describe('Fecha inicio en formato YYYY-MM-DD (opcional)'),
+      endDate: z.string().optional().describe('Fecha fin en formato YYYY-MM-DD (opcional)'),
+    }),
+    execute: async ({ customerId, startDate, endDate }) => {
+      const supabase = createAnonClient()
+      let query = supabase
+        .from('rentals')
+        .select(
+          'id, legacy_id, event_date, delivery_date, pickup_date, delivery_address, status, warehouse:warehouses(name), items:rental_items(quantity, article:articles(code, description))',
+        )
+        .eq('customer_id', customerId)
+        .order('event_date', { ascending: false })
+        .limit(30)
+
+      if (startDate) query = query.gte('event_date', startDate)
+      if (endDate) query = query.lte('event_date', endDate)
+
+      const { data, error } = await query
+
+      if (error) return { error: error.message }
+      return { rentals: data, count: data?.length ?? 0 }
     },
   }),
 
@@ -54,8 +180,7 @@ export const chatTools = {
     }),
     execute: async ({ articleId, startDate, endDate }) => {
       const supabase = createAnonClient()
-      const rpc = supabase as unknown as RpcClient
-      const { data, error } = await rpc.rpc('get_article_reservations_optimized', {
+      const { data, error } = await callRpc<ArticleReservationRow>(supabase, 'get_article_reservations_optimized', {
         p_article_id: articleId,
         start_date: startDate,
         end_date: endDate ?? startDate,
@@ -64,10 +189,11 @@ export const chatTools = {
       if (error) return { error: error.message }
 
       // Also get total stock for context
-      const { data: stockData } = await supabase
+      const { data: stockDataRaw } = await supabase
         .from('article_stock')
         .select('quantity, warehouse:warehouses(name)')
         .eq('article_id', articleId)
+      const stockData = stockDataRaw as unknown as Array<{ quantity: number; warehouse: WarehouseRef | null }> | null
 
       const { data: article } = await supabase
         .from('articles')
@@ -75,13 +201,12 @@ export const chatTools = {
         .eq('id', articleId)
         .single()
 
-      const totalStock = (stockData as Array<{ quantity: number }>)?.reduce((sum, s) => sum + s.quantity, 0) ?? 0
+      const totalStock = (stockData ?? []).reduce((sum, s) => sum + s.quantity, 0)
 
       // Group reservations by date to show daily committed
-      const reservations = data as Array<{ reservation_date: string; quantity: number; customer_name: string; rental_id: string }> | null
       const byDate = new Map<string, { committed: number; reservations: Array<{ customer: string; quantity: number }> }>()
 
-      for (const r of reservations ?? []) {
+      for (const r of data ?? []) {
         const existing = byDate.get(r.reservation_date)
         if (!existing) {
           byDate.set(r.reservation_date, {
@@ -120,25 +245,12 @@ export const chatTools = {
     }),
     execute: async ({ startDate, endDate }) => {
       const supabase = createAnonClient()
-      const rpc = supabase as unknown as RpcClient
-      const { data, error } = await rpc.rpc('get_stock_breakages_optimized', {
+      const { data, error } = await callRpc<StockBreakageRow>(supabase, 'get_stock_breakages_optimized', {
         start_date: startDate,
         end_date: endDate,
       })
 
       if (error) return { error: error.message }
-
-      const breakages = data as Array<{
-        article_id: string
-        article_code: string | null
-        article_description: string
-        breakage_date: string
-        total_stock: number
-        committed: number
-        available: number
-        stock_sevilla: number
-        stock_jerez: number
-      }> | null
 
       // Group by article for summary
       const grouped = new Map<string, {
@@ -153,7 +265,7 @@ export const chatTools = {
         lastDate: string
       }>()
 
-      for (const b of breakages ?? []) {
+      for (const b of data ?? []) {
         const existing = grouped.get(b.article_id)
         if (!existing) {
           grouped.set(b.article_id, {
@@ -178,7 +290,7 @@ export const chatTools = {
       }
 
       return {
-        totalBreakages: breakages?.length ?? 0,
+        totalBreakages: data?.length ?? 0,
         articlesAffected: grouped.size,
         articles: Array.from(grouped.values()).sort((a, b) => b.maxDeficit - a.maxDeficit),
       }
@@ -194,20 +306,19 @@ export const chatTools = {
     }),
     execute: async ({ articleId, startDate, endDate }) => {
       const supabase = createAnonClient()
-      const rpc = supabase as unknown as RpcClient
-      const { data, error } = await rpc.rpc('get_article_reservations_optimized', {
+      const { data, error } = await callRpc<ArticleReservationRow>(supabase, 'get_article_reservations_optimized', {
         p_article_id: articleId,
         start_date: startDate,
         end_date: endDate,
       })
 
       if (error) return { error: error.message }
-      return { reservations: data, count: (data as Array<unknown>)?.length ?? 0 }
+      return { reservations: data, count: data?.length ?? 0 }
     },
   }),
 
   getRentalsByDate: tool({
-    description: 'Obtiene los eventos/reservas programados para una fecha especifica (por event_date). Incluye nombre del cliente y cantidad de articulos.',
+    description: 'Obtiene los eventos/reservas programados para una fecha especifica (por event_date). Incluye almacen, cliente y cantidad de articulos. Excluye prestamos internos entre almacenes.',
     inputSchema: z.object({
       date: z.string().describe('Fecha del evento en formato YYYY-MM-DD'),
     }),
@@ -215,18 +326,21 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('rentals')
-        .select('id, legacy_id, event_date, delivery_date, pickup_date, delivery_address, notes, status, customer:customers(name, phone), items:rental_items(quantity, article:articles(code, description))')
+        .select(
+          'id, legacy_id, event_date, delivery_date, pickup_date, delivery_address, notes, status, warehouse:warehouses(name), customer:customers(name, phone, is_internal), items:rental_items(quantity, article:articles(code, description))',
+        )
         .eq('event_date', date)
         .neq('status', 'cancelled')
         .order('created_at', { ascending: false })
 
       if (error) return { error: error.message }
-      return { rentals: data, count: data?.length ?? 0 }
+      const rentals = ((data as unknown as RentalRow[]) ?? []).filter((r) => !r.customer?.is_internal)
+      return { rentals, count: rentals.length }
     },
   }),
 
   getDeliveriesByDate: tool({
-    description: 'Obtiene las entregas de material programadas para una fecha especifica (por delivery_date). Incluye direcciones de entrega.',
+    description: 'Obtiene las entregas de material programadas para una fecha especifica (por delivery_date). Incluye direcciones de entrega. Excluye prestamos internos entre almacenes.',
     inputSchema: z.object({
       date: z.string().describe('Fecha de entrega en formato YYYY-MM-DD'),
     }),
@@ -234,18 +348,21 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('rentals')
-        .select('id, legacy_id, event_date, delivery_date, delivery_address, notes, customer:customers(name, phone, address)')
+        .select(
+          'id, legacy_id, event_date, delivery_date, delivery_address, notes, warehouse:warehouses(name), customer:customers(name, phone, address, is_internal)',
+        )
         .eq('delivery_date', date)
         .neq('status', 'cancelled')
         .order('delivery_address')
 
       if (error) return { error: error.message }
-      return { deliveries: data, count: data?.length ?? 0 }
+      const deliveries = ((data as unknown as RentalRow[]) ?? []).filter((r) => !r.customer?.is_internal)
+      return { deliveries, count: deliveries.length }
     },
   }),
 
   getPickupsByDate: tool({
-    description: 'Obtiene las recogidas de material programadas para una fecha especifica (por pickup_date).',
+    description: 'Obtiene las recogidas de material programadas para una fecha especifica (por pickup_date). Excluye prestamos internos entre almacenes.',
     inputSchema: z.object({
       date: z.string().describe('Fecha de recogida en formato YYYY-MM-DD'),
     }),
@@ -253,13 +370,16 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('rentals')
-        .select('id, legacy_id, event_date, pickup_date, delivery_address, notes, customer:customers(name, phone)')
+        .select(
+          'id, legacy_id, event_date, pickup_date, delivery_address, notes, warehouse:warehouses(name), customer:customers(name, phone, is_internal)',
+        )
         .eq('pickup_date', date)
         .neq('status', 'cancelled')
         .order('created_at', { ascending: false })
 
       if (error) return { error: error.message }
-      return { pickups: data, count: data?.length ?? 0 }
+      const pickups = ((data as unknown as RentalRow[]) ?? []).filter((r) => !r.customer?.is_internal)
+      return { pickups, count: pickups.length }
     },
   }),
 
@@ -273,7 +393,7 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('rentals')
-        .select('event_date, delivery_date, pickup_date')
+        .select('event_date, delivery_date, pickup_date, customer:customers(is_internal)')
         .not('event_date', 'is', null)
         .gte('event_date', startDate)
         .lte('event_date', endDate)
@@ -281,10 +401,12 @@ export const chatTools = {
 
       if (error) return { error: error.message }
 
+      const rentals = ((data as unknown as Array<{ event_date: string; customer: CustomerRef | null }>) ?? [])
+        .filter((r) => !r.customer?.is_internal)
+
       // Group by week
       const weeks = new Map<string, number>()
-      const rentals = data as Array<{ event_date: string; delivery_date: string; pickup_date: string }>
-      for (const rental of rentals ?? []) {
+      for (const rental of rentals) {
         const date = new Date(rental.event_date)
         const weekStart = new Date(date)
         weekStart.setDate(date.getDate() - date.getDay() + 1) // Monday
@@ -297,7 +419,7 @@ export const chatTools = {
         .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
 
       return {
-        totalEvents: rentals?.length ?? 0,
+        totalEvents: rentals.length,
         weeks: forecast,
         peakWeek: forecast.reduce((max, w) => w.eventCount > max.eventCount ? w : max, { weekStart: '', eventCount: 0 }),
       }
@@ -312,23 +434,12 @@ export const chatTools = {
     }),
     execute: async ({ startDate, endDate }) => {
       const supabase = createAnonClient()
-      const rpc = supabase as unknown as RpcClient
-      const { data, error } = await rpc.rpc('get_stock_breakages_optimized', {
+      const { data, error } = await callRpc<StockBreakageRow>(supabase, 'get_stock_breakages_optimized', {
         start_date: startDate,
         end_date: endDate,
       })
 
       if (error) return { error: error.message }
-
-      const breakages = data as Array<{
-        article_id: string
-        article_code: string | null
-        article_description: string
-        article_family: string | null
-        total_stock: number
-        committed: number
-        available: number
-      }> | null
 
       // For each article, find the maximum deficit (worst day)
       const needs = new Map<string, {
@@ -341,7 +452,7 @@ export const chatTools = {
         needToBuy: number
       }>()
 
-      for (const b of breakages ?? []) {
+      for (const b of data ?? []) {
         const deficit = Math.abs(b.available)
         const existing = needs.get(b.article_id)
         if (!existing || deficit > existing.maxDeficit) {
@@ -378,20 +489,12 @@ export const chatTools = {
       const supabase = createAnonClient()
       const { data, error } = await supabase
         .from('rentals')
-        .select('id, items:rental_items(quantity, article_id, article:articles(code, description))')
+        .select('id, customer:customers(is_internal), items:rental_items(quantity, article_id, article:articles(code, description))')
         .gte('event_date', startDate)
         .lte('event_date', endDate)
         .neq('status', 'cancelled')
 
       if (error) return { error: error.message }
-
-      type RentalWithItems = {
-        items: Array<{
-          quantity: number
-          article_id: string
-          article: { code: string | null; description: string } | null
-        }>
-      }
 
       const totals = new Map<string, {
         code: string | null
@@ -400,7 +503,12 @@ export const chatTools = {
         reservationCount: number
       }>()
 
-      for (const rental of (data as RentalWithItems[]) ?? []) {
+      const rentals = (data as unknown as Array<{
+        customer: CustomerRef | null
+        items: Array<{ quantity: number; article_id: string; article: ArticleRef | null }>
+      }>) ?? []
+
+      for (const rental of rentals.filter((r) => !r.customer?.is_internal)) {
         for (const item of rental.items ?? []) {
           const existing = totals.get(item.article_id)
           if (!existing) {
