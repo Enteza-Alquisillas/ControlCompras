@@ -8,6 +8,7 @@ import { ChatInput } from './ChatInput'
 import { ChatSourceToggle } from './ChatSourceToggle'
 import type { ChatSource } from '../types'
 import { DEFAULT_CHAT_SOURCE } from '../types'
+import { compactToolOutputsForHistory } from '../lib/compactToolOutputsForHistory'
 
 const SUGGESTIONS: Record<ChatSource, string[]> = {
   machu: [
@@ -31,7 +32,18 @@ const SOURCE_LABELS: Record<ChatSource, string> = {
 
 export function ChatPage() {
   const [source, setSource] = useState<ChatSource>(DEFAULT_CHAT_SOURCE)
-  const transport = useMemo(() => new DefaultChatTransport({ api: '/api/chat' }), [])
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: '/api/chat',
+    prepareSendMessagesRequest: ({ id, messages, body, trigger, messageId }) => ({
+      body: {
+        ...body,
+        id,
+        trigger,
+        messageId,
+        messages: compactToolOutputsForHistory(messages),
+      },
+    }),
+  }), [])
 
   const { messages, sendMessage, status, setMessages, error, clearError, regenerate } = useChat({ transport })
 
