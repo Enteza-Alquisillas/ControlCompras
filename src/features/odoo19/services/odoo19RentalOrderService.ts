@@ -27,8 +27,15 @@ const SALE_ONLY_CODES = new Set(['4502', '4503', '4504', '4505', '4506', '4507']
  */
 const GENERIC_CUSTOMER_NAME = 'CLIENTES VARIOS'
 
+/**
+ * Nombre de la posición fiscal por defecto en Odoo 19 cuando el cliente no
+ * tiene una posición fiscal propia configurada (property_account_position_id).
+ */
+const DEFAULT_FISCAL_POSITION_NAME = 'España Peninsula'
+
 export class Odoo19RentalOrderService {
   private partnersByVat: Map<string, Odoo19Partner[]> | null = null
+  private defaultFiscalPositionByCompany = new Map<number, number>()
 
   constructor(private readonly client: Odoo19Client) {}
 
@@ -36,6 +43,7 @@ export class Odoo19RentalOrderService {
     const destination = await resolveOdoo19Destination(this.client, rental.warehouse?.code)
     const context = companyContext(destination.companyId)
     const partnerId = await this.findPartner(rental.customer?.vat, rental.customer?.name, context)
+    const fiscalPositionId = await this.resolveFiscalPositionId(partnerId, destination.companyId, context)
     const lines = await this.buildRentalLines(rental, context)
     const dates = rentalDates(rental.deliveryDate, rental.pickupDate)
 
@@ -43,6 +51,7 @@ export class Odoo19RentalOrderService {
       company_id: destination.companyId,
       warehouse_id: destination.warehouseId,
       partner_id: partnerId,
+      fiscal_position_id: fiscalPositionId,
       is_rental_order: true,
       rental_start_date: dates.start,
       rental_return_date: dates.end,
@@ -106,6 +115,49 @@ export class Odoo19RentalOrderService {
       )
     }
     return generic[0].id
+  }
+
+  /**
+   * Odoo calcula fiscal_position_id como campo computado (_compute_fiscal_position),
+   * pero al crear el pedido vía API (create() directo, sin pasar por el onchange del
+   * formulario web) esa detección automática puede no aplicar la posición fiscal
+   * correcta. Se fija explícitamente: la propia del cliente si la tiene configurada,
+   * o "España" como posición fiscal por defecto.
+   */
+  private async resolveFiscalPositionId(
+    partnerId: number,
+    companyId: number,
+    context: Record<string, unknown>
+  ): Promise<number> {
+    const [partner] = await this.client.searchRead<Odoo19Partner>(
+      'res.partner',
+      [['id', '=', partnerId]],
+      ['id', 'property_account_position_id'],
+      context
+    )
+    if (partner?.property_account_position_id) return partner.property_account_position_id[0]
+
+    return this.getDefaultFiscalPositionId(companyId, context)
+  }
+
+  private async getDefaultFiscalPositionId(companyId: number, context: Record<string, unknown>): Promise<number> {
+    const cached = this.defaultFiscalPositionByCompany.get(companyId)
+    if (cached) return cached
+
+    const positions = await this.client.searchRead<{ id: number; name: string }>(
+      'account.fiscal.position',
+      [['name', '=', DEFAULT_FISCAL_POSITION_NAME], ['company_id', 'in', [companyId, false]]],
+      ['id', 'name'],
+      context
+    )
+    if (positions.length === 0) {
+      throw new Error(
+        `No se encontró la posición fiscal por defecto "${DEFAULT_FISCAL_POSITION_NAME}" en Odoo 19 para la compañía ${companyId}.`
+      )
+    }
+
+    this.defaultFiscalPositionByCompany.set(companyId, positions[0].id)
+    return positions[0].id
   }
 
   private async getPartnersByVat(context: Record<string, unknown>): Promise<Map<string, Odoo19Partner[]>> {

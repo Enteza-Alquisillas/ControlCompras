@@ -51,6 +51,7 @@ export interface Odoo19Partner {
   id: number
   name: string
   vat: string | false
+  property_account_position_id?: [number, string] | false
 }
 
 export interface Odoo19Product {
