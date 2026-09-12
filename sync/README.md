@@ -270,6 +270,12 @@ npm run sync:master
 # Sincronizar solo reservas
 npm run sync:rentals
 
+# Simular el relleno de NIF/CIF vacíos desde dbo.CLIENTE de Sevilla y Jerez
+npm run sync:backfill-vat
+
+# Aplicar únicamente las actualizaciones validadas tras revisar la simulación
+npm run sync:backfill-vat:apply
+
 # Verificar tipos TypeScript
 npm run typecheck
 

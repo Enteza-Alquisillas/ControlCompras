@@ -211,10 +211,19 @@ producción.
 
 ## 7. Cómo trabajar en este repositorio
 
-- **Descubre el stack, no lo asumas.** Lenguaje, framework, gestor de
-  dependencias, cómo se autentica hoy contra Odoo, si el Odoo está en HTTPS
-  público: todo eso está en el código. Léelo. `⟨rellena aquí lo que averigües
-  para el siguiente agente⟩`.
+- **Stack e integración actual.** Next.js 16 con TypeScript; el exportador
+  determinista está en `src/features/odoo19/` y usa JSON-2 con Bearer API key
+  (`ODOO19_*`). La consulta de datos procede de Supabase y el pedido se crea en
+  `sale.order`. El chat mantiene su cliente MCP separado en
+  `src/features/chat/mcp/` y usa `ODOO_MCP_*`.
+- **Idempotencia de exportación.** Antes de crear un pedido se busca por
+  `client_order_ref`/`name` del contrato legacy y compañía. Nunca reintentes un
+  `create` HTTP automáticamente: una respuesta perdida puede ocultar una
+  transacción ya confirmada. La clase de línea (alquiler o venta) se deriva del
+  `rent_ok` del producto en Odoo, no de una lista local de códigos.
+- **Posición fiscal.** No presupongas nombres localizados: la posición fiscal
+  doméstica se resuelve por el país España y `auto_apply`, por compañía. Por
+  ejemplo, Stileum la llama `ES Domestic`, no `España Peninsula`.
 - **Separa los dos carriles en el código.** El módulo/servicio de exportación y
   el del chat no comparten cliente HTTP hacia Odoo: distinto protocolo (JSON-2 vs
   MCP), distinta credencial, distinto ciclo de vida.

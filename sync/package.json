@@ -10,6 +10,8 @@
     "sync": "tsx src/index.ts",
     "sync:master": "tsx src/index.ts --only masters",
     "sync:rentals": "tsx src/index.ts --only rentals",
+    "sync:backfill-vat": "tsx src/backfillCustomerVat.ts",
+    "sync:backfill-vat:apply": "tsx src/backfillCustomerVat.ts --apply",
     "test:connections": "tsx src/index.ts --test-connections",
     "typecheck": "tsc --noEmit"
   },

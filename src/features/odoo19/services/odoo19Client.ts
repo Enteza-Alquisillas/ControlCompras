@@ -43,12 +43,12 @@ export class Odoo19Client {
 
   async searchRead<T>(
     model: string,
-    domain: unknown[][],
+    domain: unknown[],
     fields: string[],
     context: Record<string, unknown> = {},
     limit = 100
   ): Promise<T[]> {
-    return this.call<T[]>(model, 'search_read', { domain, fields, context, limit })
+    return this.call<T[]>(model, 'search_read', { domain, fields, context, limit }, true)
   }
 
   async create(
@@ -56,6 +56,8 @@ export class Odoo19Client {
     values: Record<string, unknown>,
     context: Record<string, unknown>
   ): Promise<number> {
+    // A create may have succeeded even if its response was lost. Retrying it
+    // here would duplicate a sales order; callers reconcile by external key.
     const ids = await this.call<number[]>(model, 'create', { vals_list: [values], context })
     return ids[0]
   }
@@ -66,7 +68,7 @@ export class Odoo19Client {
     values: Record<string, unknown>,
     context: Record<string, unknown>
   ): Promise<boolean> {
-    return this.call<boolean>(model, 'write', { ids, vals: values, context })
+    return this.call<boolean>(model, 'write', { ids, vals: values, context }, true)
   }
 
   async callMethod<T>(
@@ -78,7 +80,12 @@ export class Odoo19Client {
     return this.call<T>(model, method, { ids, context })
   }
 
-  private async call<T>(model: string, method: string, params: Record<string, unknown>): Promise<T> {
+  private async call<T>(
+    model: string,
+    method: string,
+    params: Record<string, unknown>,
+    retryTransientFailures = false
+  ): Promise<T> {
     const operation = `${model}.${method}`
     let lastError: Error | null = null
 
@@ -101,7 +108,7 @@ export class Odoo19Client {
       } catch (networkError) {
         const reason = networkError instanceof Error ? networkError.message : 'error de red desconocido'
         lastError = new Odoo19Error(`No se pudo conectar con Odoo 19 al ejecutar ${operation}: ${reason}`)
-        if (attempt === RETRY_DELAYS_MS.length) throw lastError
+        if (!retryTransientFailures || attempt === RETRY_DELAYS_MS.length) throw lastError
         continue
       }
 
@@ -117,7 +124,7 @@ export class Odoo19Client {
 
       if (response.status >= 500) {
         lastError = new Odoo19Error(`Odoo 19 devolvió un error de servidor al ejecutar ${operation} (HTTP ${response.status}): ${detail}`)
-        if (attempt === RETRY_DELAYS_MS.length) throw lastError
+        if (!retryTransientFailures || attempt === RETRY_DELAYS_MS.length) throw lastError
         continue
       }
 

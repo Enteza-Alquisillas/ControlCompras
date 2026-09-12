@@ -15,33 +15,26 @@ function normalizeVat(value: string | null | false): string | null {
 }
 
 /**
- * "SOBRE VENTA..." (4502-4507): cargo que se vende, no artículo que se alquila.
- * Se crearon en Odoo 19 como producto de servicio (rent_ok=false) porque su
- * stock legacy era un valor centinela, no una cantidad real (ver PRP-ODOO-004).
- */
-const SALE_ONLY_CODES = new Set(['4502', '4503', '4504', '4505', '4506', '4507'])
-
-/**
  * Cliente genérico en Odoo 19 para reservas cuyo cliente no se pudo enlazar de
  * forma inequívoca. Nunca se crea un partner nuevo automáticamente.
  */
 const GENERIC_CUSTOMER_NAME = 'CLIENTES VARIOS'
 
-/**
- * Nombre de la posición fiscal por defecto en Odoo 19 cuando el cliente no
- * tiene una posición fiscal propia configurada (property_account_position_id).
- */
-const DEFAULT_FISCAL_POSITION_NAME = 'España Peninsula'
+const DEFAULT_FISCAL_POSITION_COUNTRY_CODE = 'ES'
 
 export class Odoo19RentalOrderService {
   private partnersByVat: Map<string, Odoo19Partner[]> | null = null
   private defaultFiscalPositionByCompany = new Map<number, number>()
+  private defaultFiscalPositionCountryId: number | null = null
 
   constructor(private readonly client: Odoo19Client) {}
 
   async createRentalOrder(rental: Odoo19RentalForExport): Promise<{ orderId: number; companyCode: string }> {
     const destination = await resolveOdoo19Destination(this.client, rental.warehouse?.code)
     const context = companyContext(destination.companyId)
+    const existingOrderId = await this.findExistingOrder(rental.legacyId, destination.companyId, context)
+    if (existingOrderId !== null) return { orderId: existingOrderId, companyCode: destination.code }
+
     const partnerId = await this.findPartner(rental.customer?.vat, rental.customer?.name, context)
     const fiscalPositionId = await this.resolveFiscalPositionId(partnerId, destination.companyId, context)
     const lines = await this.buildRentalLines(rental, context)
@@ -71,6 +64,31 @@ export class Odoo19RentalOrderService {
 
     const orderId = await this.client.create('sale.order', values, context)
     return { orderId, companyCode: destination.code }
+  }
+
+  /**
+   * A failed HTTP response does not prove that Odoo rolled the transaction
+   * back. The legacy contract number is our stable idempotency key, so reuse
+   * an existing order instead of creating a duplicate on a later retry.
+   */
+  private async findExistingOrder(
+    legacyId: number | null,
+    companyId: number,
+    context: Record<string, unknown>
+  ): Promise<number | null> {
+    if (legacyId === null) return null
+
+    const orders = await this.client.searchRead<{ id: number }>(
+      'sale.order',
+      ['|', ['client_order_ref', '=', `ENTEZA-${legacyId}`], ['name', '=', String(legacyId)], ['company_id', '=', companyId]],
+      ['id'],
+      context,
+      2
+    )
+    if (orders.length > 1) {
+      throw new Error(`Hay varios pedidos de Odoo 19 para el contrato ${legacyId} en la compañía ${companyId}; revísalos antes de reintentar.`)
+    }
+    return orders[0]?.id ?? null
   }
 
   private async findPartner(
@@ -122,7 +140,7 @@ export class Odoo19RentalOrderService {
    * pero al crear el pedido vía API (create() directo, sin pasar por el onchange del
    * formulario web) esa detección automática puede no aplicar la posición fiscal
    * correcta. Se fija explícitamente: la propia del cliente si la tiene configurada,
-   * o "España" como posición fiscal por defecto.
+   * o la posición doméstica española configurada para la compañía.
    */
   private async resolveFiscalPositionId(
     partnerId: number,
@@ -144,20 +162,41 @@ export class Odoo19RentalOrderService {
     const cached = this.defaultFiscalPositionByCompany.get(companyId)
     if (cached) return cached
 
+    const countryId = await this.getDefaultFiscalPositionCountryId(context)
     const positions = await this.client.searchRead<{ id: number; name: string }>(
       'account.fiscal.position',
-      [['name', '=', DEFAULT_FISCAL_POSITION_NAME], ['company_id', 'in', [companyId, false]]],
+      [
+        ['company_id', 'in', [companyId, false]],
+        ['country_id', '=', countryId],
+        ['auto_apply', '=', true],
+      ],
       ['id', 'name'],
       context
     )
     if (positions.length === 0) {
       throw new Error(
-        `No se encontró la posición fiscal por defecto "${DEFAULT_FISCAL_POSITION_NAME}" en Odoo 19 para la compañía ${companyId}.`
+        `No se encontró una posición fiscal doméstica española configurada en Odoo 19 para la compañía ${companyId}.`
       )
     }
 
     this.defaultFiscalPositionByCompany.set(companyId, positions[0].id)
     return positions[0].id
+  }
+
+  private async getDefaultFiscalPositionCountryId(context: Record<string, unknown>): Promise<number> {
+    if (this.defaultFiscalPositionCountryId !== null) return this.defaultFiscalPositionCountryId
+
+    const countries = await this.client.searchRead<{ id: number }>(
+      'res.country',
+      [['code', '=', DEFAULT_FISCAL_POSITION_COUNTRY_CODE]],
+      ['id'],
+      context,
+      1
+    )
+    if (countries.length === 0) throw new Error('No se encontró España en la configuración de países de Odoo 19.')
+
+    this.defaultFiscalPositionCountryId = countries[0].id
+    return this.defaultFiscalPositionCountryId
   }
 
   private async getPartnersByVat(context: Record<string, unknown>): Promise<Map<string, Odoo19Partner[]>> {
@@ -194,23 +233,18 @@ export class Odoo19RentalOrderService {
       if (!item.article?.code) throw new Error(`Artículo sin referencia interna: ${item.article?.description ?? 'desconocido'}`)
       if (item.quantity <= 0) throw new Error(`Cantidad no válida para ${item.article.description}`)
 
-      const numericCode = item.article.code.replace(/^ART-/i, '')
-      const isSaleOnly = SALE_ONLY_CODES.has(numericCode)
-      const productId = await this.findRentalProduct(item.article.code, context, !isSaleOnly)
+      const product = await this.findProduct(item.article.code, context)
       lines.push([0, 0, {
-        product_id: productId,
+        product_id: product.id,
         product_uom_qty: item.quantity,
-        is_rental: !isSaleOnly,
+        // Odoo is the source of truth for whether a line is rented or sold.
+        is_rental: product.rent_ok,
       }])
     }
     return lines
   }
 
-  private async findRentalProduct(
-    code: string,
-    context: Record<string, unknown>,
-    requireRentOk = true
-  ): Promise<number> {
+  private async findProduct(code: string, context: Record<string, unknown>): Promise<Odoo19Product> {
     const numericCode = code.replace(/^ART-/i, '')
     const domain = [['default_code', 'in', [code, numericCode]]]
     const products = await this.client.searchRead<Odoo19Product>(
@@ -219,14 +253,8 @@ export class Odoo19RentalOrderService {
       ['id', 'name', 'default_code', 'rent_ok'],
       context
     )
-    const product = requireRentOk ? products.find((candidate) => candidate.rent_ok) : products[0]
-    if (product) return product.id
-
-    if (!requireRentOk) throw new Error(`Producto de venta no encontrado en Odoo 19: ${code}`)
-
-    if (products.length > 0) {
-      throw new Error(`El producto ${code} existe en Odoo 19 pero no tiene "Puede alquilarse" (rent_ok) activado.`)
-    }
+    const product = products[0]
+    if (product) return product
 
     const archived = await this.client.searchRead<Odoo19Product>(
       'product.product',

@@ -120,65 +120,7 @@ No das opciones técnicas. Ejecutas el stack perfeccionado:
 
 ---
 
-## 🏗️ Arquitectura Feature-First
-
-> **¿Por qué Feature-First?** Colocalización para IA. Todo el contexto de una feature en un solo lugar. No saltas entre 5 carpetas para entender algo.
-
-```
-src/
-├── app/                      # Next.js App Router
-│   ├── (auth)/              # Rutas de autenticación
-│   ├── (main)/              # Rutas principales
-│   └── layout.tsx           # Layout root
-│
-├── features/                 # Organizadas por funcionalidad
-│   ├── auth/
-│   │   ├── components/      # LoginForm, SignupForm
-│   │   ├── hooks/           # useAuth
-│   │   ├── services/        # authService.ts
-│   │   ├── types/           # User, Session
-│   │   └── store/           # authStore.ts
-│   │
-│   └── [feature]/           # Misma estructura
-│
-└── shared/                   # Código reutilizable
-    ├── components/          # Button, Card, etc.
-    ├── hooks/               # useDebounce, etc.
-    ├── lib/                 # supabase.ts, etc.
-    └── types/               # Tipos compartidos
-```
-
----
-
-## 🔌 MCPs: Tus Sentidos y Manos
-
-### 🧠 Next.js DevTools MCP - Quality Control
-Conectado vía `/_next/mcp`. Ve errores build/runtime en tiempo real.
-
-```
-init → Inicializa contexto
-nextjs_call → Lee errores, logs, estado
-nextjs_docs → Busca en docs oficiales
-```
-
-### 👁️ Playwright MCP - Tus Ojos
-Validación visual y testing del navegador.
-
-```
-playwright_navigate → Navega a URL
-playwright_screenshot → Captura visual
-playwright_click/fill → Interactúa con elementos
-```
-
-### 🖐️ Supabase MCP - Tus Manos (Backend)
-Interactúa con PostgreSQL sin CLI.
-
-```
-execute_sql → SELECT, INSERT, UPDATE, DELETE
-apply_migration → CREATE TABLE, ALTER, índices, RLS
-list_tables → Ver estructura de BD
-get_advisors → Detectar tablas sin RLS
-```
+> **¿Por qué Feature-First?** Colocalización para IA. Todo el contexto de una feature en un solo lugar. No saltas entre 5 carpetas para entender algo. Estructura real: `src/app` (Next.js App Router), `src/features/<feature>/{components,hooks,services,types,store}`, `src/shared/{components,hooks,lib,types}`.
 
 ---
 
@@ -219,46 +161,13 @@ Ver `.claude/prompts/bucle-agentico-blueprint.md` para el proceso completo:
 
 ## 📏 Reglas de Código
 
-### Principios
-- **KISS**: Prefiere soluciones simples
-- **YAGNI**: Implementa solo lo necesario
-- **DRY**: Evita duplicación
-- **SOLID**: Una responsabilidad por componente
-
 ### Límites
 - Archivos: Máximo 500 líneas
 - Funciones: Máximo 50 líneas
 - Componentes: Una responsabilidad clara
 
-### Naming
-- Variables/Functions: `camelCase`
-- Components: `PascalCase`
-- Constants: `UPPER_SNAKE_CASE`
-- Files/Folders: `kebab-case`
-
 ### TypeScript
-- Siempre type hints en function signatures
-- Interfaces para object shapes
-- Types para unions
 - NUNCA usar `any` (usar `unknown`)
-
-### Patrón de Componente
-
-```typescript
-interface Props {
-  children: React.ReactNode;
-  variant?: 'primary' | 'secondary';
-  onClick: () => void;
-}
-
-export function Button({ children, variant = 'primary', onClick }: Props) {
-  return (
-    <button onClick={onClick} className={`btn btn-${variant}`}>
-      {children}
-    </button>
-  );
-}
-```
 
 ---
 
@@ -275,24 +184,6 @@ npm run lint         # ESLint
 ### Git
 ```bash
 npm run commit       # Conventional Commits
-```
-
----
-
-## 🧪 Testing (Patrón AAA)
-
-```typescript
-test('should calculate total with tax', () => {
-  // Arrange
-  const items = [{ price: 100 }, { price: 200 }];
-  const taxRate = 0.1;
-
-  // Act
-  const result = calculateTotal(items, taxRate);
-
-  // Assert
-  expect(result).toBe(330);
-});
 ```
 
 ---
