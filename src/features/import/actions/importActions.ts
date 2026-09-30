@@ -452,31 +452,50 @@ export async function upsertCustomersAction(customers: any[]): Promise<ImportRes
 }
 
 /**
- * Borra todas las reservas y sus detalles para permitir una importación limpia
+ * Borra las reservas NO exportadas a Odoo y sus detalles para permitir una importación limpia.
+ * Las exportadas (odoo_order_id u odoo19_order_id) se conservan: su traza es lo único que
+ * evita exportarlas otra vez y duplicar el pedido en Odoo, y no se puede recuperar de SQL
+ * Server. La importación posterior las actualiza por (legacy_id, warehouse_id) sin perderla.
+ * Incidente 05/09/2026: un vaciado total dejó 33 reservas de Jerez sin traza y 2 duplicadas.
  */
 export async function resetRentalsAction(): Promise<ImportResult> {
     const supabase = await createAdminClient()
     try {
-        console.log('[Action] Iniciando limpieza total de reservas...')
+        console.log('[Action] Iniciando limpieza de reservas no exportadas...')
 
-        // 1. Borrar todas las líneas de detalle
-        const { error: itemsError } = await (supabase as any)
-            .from('rental_items')
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000') // Borrado masivo (requiere condición en algunos entornos)
+        // 1. Reunir primero los IDs (borrar mientras se pagina desplazaría las páginas)
+        const idsToDelete: string[] = []
+        for (let offset = 0; ; offset += 1000) {
+            const { data, error } = await (supabase as any)
+                .from('rentals')
+                .select('id')
+                .is('odoo_order_id', null)
+                .is('odoo19_order_id', null)
+                .order('id')
+                .range(offset, offset + 999)
+            if (error) throw error
+            idsToDelete.push(...(data ?? []).map((r: { id: string }) => r.id))
+            if (!data || data.length < 1000) break
+        }
 
-        if (itemsError) throw itemsError
-
-        // 2. Borrar todas las cabeceras de reservas
-        const { error: rentalsError } = await (supabase as any)
+        const { count: preserved, error: countError } = await (supabase as any)
             .from('rentals')
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000')
+            .select('id', { count: 'exact', head: true })
+            .or('odoo_order_id.not.is.null,odoo19_order_id.not.is.null')
+        if (countError) throw countError
 
-        if (rentalsError) throw rentalsError
+        // 2. Borrar sus líneas (FK) y después las cabeceras
+        await processInChunks(idsToDelete, 200, async (chunk) => {
+            const { error } = await (supabase as any).from('rental_items').delete().in('rental_id', chunk)
+            if (error) throw error
+        })
+        await processInChunks(idsToDelete, 200, async (chunk) => {
+            const { error } = await (supabase as any).from('rentals').delete().in('id', chunk)
+            if (error) throw error
+        })
 
-        console.log('[Action] Limpieza de reservas completada con éxito.')
-        return { success: true, count: 0, table: 'rentals' }
+        console.log(`[Action] Limpieza completada: ${idsToDelete.length} borradas, ${preserved ?? 0} exportadas conservadas.`)
+        return { success: true, count: idsToDelete.length, table: 'rentals', skippedCount: preserved ?? 0 }
     } catch (error: any) {
         console.error('[Action] Error en Reset de Reservas:', error)
         return { success: false, count: 0, table: 'rentals', error: error.message }

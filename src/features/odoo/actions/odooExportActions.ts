@@ -107,12 +107,19 @@ export async function exportRentalsToOdoo(
 
   for (const rental of rentalsToExport) {
     try {
+      if (rental.odoo_order_id !== null) {
+        throw new Error(`La reserva ya está exportada a Odoo como pedido #${rental.odoo_order_id}`)
+      }
+
       const odooOrderId = await saleOrderService.createSaleOrder(rental)
 
-      await (supabase as any)
+      const { error: traceError } = await (supabase as any)
         .from('rentals')
         .update({ odoo_order_id: odooOrderId, odoo_synced_at: new Date().toISOString() })
         .eq('id', rental.id)
+      if (traceError) {
+        throw new Error(`El pedido #${odooOrderId} se creó en Odoo, pero no se pudo guardar la trazabilidad: ${traceError.message}`)
+      }
 
       results.push({
         rentalId: rental.id,

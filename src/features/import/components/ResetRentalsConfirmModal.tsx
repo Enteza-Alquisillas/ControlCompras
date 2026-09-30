@@ -18,12 +18,15 @@ export function ResetRentalsConfirmModal({ onConfirm, onClose, isDeleting }: Pro
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <section role="dialog" aria-modal="true" aria-labelledby="reset-rentals-title" className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 id="reset-rentals-title" className="text-lg font-semibold text-red-700">Vaciar todas las reservas</h3>
+          <h3 id="reset-rentals-title" className="text-lg font-semibold text-red-700">Vaciar reservas no exportadas</h3>
         </div>
 
         <div className="px-6 py-4 space-y-3">
           <p className="text-sm text-gray-700">
-            Esto borra <strong>todos</strong> los pedidos (<code>rentals</code>) y sus líneas de artículos (<code>rental_items</code>) de ambos almacenes. No afecta a artículos, clientes ni stock.
+            Esto borra los pedidos (<code>rentals</code>) y sus líneas de artículos (<code>rental_items</code>) de ambos almacenes que <strong>no se han exportado a Odoo</strong>. No afecta a artículos, clientes ni stock.
+          </p>
+          <p className="text-sm text-gray-700">
+            Las reservas ya exportadas a Odoo se conservan con su número de pedido, para no volver a exportarlas y duplicar pedidos. La siguiente importación las actualiza.
           </p>
           <p className="text-sm text-red-600 font-medium">
             Esta accion es irreversible: no hay copia de seguridad automatica antes de borrar.

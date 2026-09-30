@@ -82,9 +82,33 @@ export class OdooSaleOrderService {
     return 1 // SEVILLA (default — sale.order.type id=2 also defaults to 1)
   }
 
+  /**
+   * The legacy contract number is copied as the order name, so it is our idempotency key:
+   * if the rental lost its odoo_order_id (re-import, failed trace write) reuse the order
+   * instead of creating a duplicate. Same rule as Odoo19RentalOrderService.findExistingOrder.
+   */
+  private async findExistingOrder(legacyId: number | null, warehouseId: number): Promise<number | null> {
+    if (!legacyId) return null
+
+    const orders = await this.client.searchRead<{ id: number; state: string }>(
+      'sale.order',
+      [['name', '=', String(legacyId)], ['warehouse_id', '=', warehouseId]],
+      ['id', 'state'],
+      10
+    )
+    if (orders.length <= 1) return orders[0]?.id ?? null
+
+    const active = orders.filter((order) => order.state !== 'cancel')
+    if (active.length === 1) return active[0].id
+    throw new Error(`Hay varios pedidos de Odoo para el contrato ${legacyId}; revísalos antes de reintentar.`)
+  }
+
   async createSaleOrder(rental: RentalForExport): Promise<number> {
     const customerName = rental.customer?.name ?? 'Cliente desconocido'
     const warehouseId = this.odooWarehouseId(rental.warehouse?.code)
+
+    const existingOrderId = await this.findExistingOrder(rental.legacy_id, warehouseId)
+    if (existingOrderId !== null) return existingOrderId
 
     // Run partner lookup in parallel with the batch product lookup — they're independent.
     const codes = rental.items

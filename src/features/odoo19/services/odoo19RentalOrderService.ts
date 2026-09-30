@@ -78,17 +78,19 @@ export class Odoo19RentalOrderService {
   ): Promise<number | null> {
     if (legacyId === null) return null
 
-    const orders = await this.client.searchRead<{ id: number }>(
+    const orders = await this.client.searchRead<{ id: number; state: string }>(
       'sale.order',
       ['|', ['client_order_ref', '=', `ENTEZA-${legacyId}`], ['name', '=', String(legacyId)], ['company_id', '=', companyId]],
-      ['id'],
+      ['id', 'state'],
       context,
-      2
+      10
     )
-    if (orders.length > 1) {
-      throw new Error(`Hay varios pedidos de Odoo 19 para el contrato ${legacyId} en la compañía ${companyId}; revísalos antes de reintentar.`)
-    }
-    return orders[0]?.id ?? null
+    if (orders.length <= 1) return orders[0]?.id ?? null
+
+    // A duplicate that was already cancelled in Odoo is not ambiguous: reuse the only live order.
+    const active = orders.filter((order) => order.state !== 'cancel')
+    if (active.length === 1) return active[0].id
+    throw new Error(`Hay varios pedidos de Odoo 19 para el contrato ${legacyId} en la compañía ${companyId}; revísalos antes de reintentar.`)
   }
 
   private async findPartner(

@@ -39,7 +39,7 @@ export function ImportWizard() {
         setShowResetConfirm(false)
 
         if (result.success) {
-            alert('Reservas borradas correctamente. Ahora puedes proceder con una importación limpia.')
+            alert(`${result.count} reservas borradas. Se han conservado ${result.skippedCount ?? 0} ya exportadas a Odoo (se actualizarán al importar). Ahora puedes proceder con la importación.`)
         } else {
             alert('Error al borrar reservas: ' + result.error)
         }
