@@ -281,7 +281,10 @@ export class SyncService {
       // We use rawData (not the transformed array) so that rentals skipped due to
       // missing customer mapping are still considered "active" in Oracle and don't
       // get accidentally cancelled.
-      const activeLegacyIds = [...new Set(rawData.map((r) => r.ID_EVENTO))]
+      // mssql returns bigint columns as strings: normalize to numbers or no Supabase
+      // legacy_id ever matches and every rental in the window gets deleted
+      // (incident 2026-09-30: 1086 Sevilla rentals wiped).
+      const activeLegacyIds = [...new Set(rawData.map((r) => Number(r.ID_EVENTO)))]
 
       // The sync window mirrors the SQL Server query: last 3 months by event_date.
       const sinceDate = new Date()

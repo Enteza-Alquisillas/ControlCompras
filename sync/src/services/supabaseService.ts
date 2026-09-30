@@ -9,6 +9,10 @@ import {
   TransformedRentalItem,
 } from '../types/index.js'
 
+// Max rentals deleteNonVigenteRentals may remove in one run: 50, or 10% of the window if larger.
+const MAX_NON_VIGENTE_DELETIONS = 50
+const MAX_NON_VIGENTE_RATIO = 0.1
+
 export class SupabaseService {
   private client: SupabaseClient
 
@@ -248,8 +252,9 @@ export class SupabaseService {
     }
 
     const sinceIso = sinceDate.toISOString().split('T')[0]
-    const activeSet = new Set(activeLegacyIds)
+    const activeSet = new Set(activeLegacyIds.map(Number))
     const toDelete: string[] = []
+    let inWindow = 0
     let hasMore = true
     let offset = 0
 
@@ -260,15 +265,19 @@ export class SupabaseService {
         .select('id, legacy_id')
         .eq('warehouse_id', warehouseId)
         .not('legacy_id', 'is', null)
-        .gte('event_date', sinceIso)
+        // gt, not gte: the SQL Server query uses DATEADD(month, -3, GETDATE()) with the
+        // current time, so events ON sinceIso (stored at midnight) are never fetched and
+        // would be deleted as "non-vigente" on every run.
+        .gt('event_date', sinceIso)
         .range(offset, offset + 999)
 
       if (error) throw error
 
       if (data && data.length > 0) {
         // Client-side filter: rentals whose legacy_id is no longer VIGENTE in Oracle
+        inWindow += data.length
         for (const r of data) {
-          if (r.legacy_id !== null && !activeSet.has(r.legacy_id)) {
+          if (r.legacy_id !== null && !activeSet.has(Number(r.legacy_id))) {
             toDelete.push(r.id)
           }
         }
@@ -282,6 +291,16 @@ export class SupabaseService {
     if (toDelete.length === 0) {
       logger.info('deleteNonVigenteRentals: no non-vigente rentals detected', { warehouseId, sinceIso })
       return 0
+    }
+
+    // Circuit breaker: a few rentals leave VIGENTE per run; a large share means the
+    // comparison is broken, not that the business cancelled half its bookings.
+    const maxDeletions = Math.max(MAX_NON_VIGENTE_DELETIONS, Math.floor(inWindow * MAX_NON_VIGENTE_RATIO))
+    if (toDelete.length > maxDeletions) {
+      throw new Error(
+        `deleteNonVigenteRentals aborted: ${toDelete.length} of ${inWindow} rentals since ${sinceIso} ` +
+        `would be deleted (limit ${maxDeletions}). Nothing was deleted; check the legacy_id comparison.`
+      )
     }
 
     // Delete rental items first (foreign key constraint), then delete rentals
