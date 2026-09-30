@@ -37,4 +37,5 @@ export interface ImportResult {
     error?: string
     skippedCount?: number
     totalFound?: number
+    warnings?: string[]
 }

@@ -8,6 +8,8 @@ import {
   transformArticles,
   transformStock,
   mapStockToArticleIds,
+  dedupeByEffectiveId,
+  describeMappingConflict,
 } from '../transformers/articleTransformer.js'
 import {
   transformCustomers,
@@ -156,9 +158,16 @@ export class SyncService {
       // Fetch from SQL Server
       const rawData = await this.sqlServer.getArticles(warehouse)
 
+      // Skip rows with a duplicated mapping instead of failing the whole batch
+      const { rows, conflicts } = dedupeByEffectiveId(rawData, warehouse)
+      const conflictErrors = conflicts.map((c) => describeMappingConflict(c, warehouse))
+      conflictErrors.forEach((message) => logger.warn('Duplicate article mapping', { warehouse, message }))
+      const skipped = rawData.length - rows.length
+      const partialErrors = conflictErrors.length > 0 ? { skipped, errors: conflictErrors } : {}
+
       // Transform
-      const transformedArticles = transformArticles(rawData, warehouse)
-      const stockRecords = transformStock(rawData, warehouse, warehouseId)
+      const transformedArticles = transformArticles(rows, warehouse)
+      const stockRecords = transformStock(rows, warehouse, warehouseId)
 
       if (this.dryRun) {
         logger.info(`[DRY-RUN] Would upsert ${transformedArticles.length} articles and ${stockRecords.length} stock records`)
@@ -166,6 +175,7 @@ export class SyncService {
           success: true,
           entity: `articles-${warehouse}`,
           count: transformedArticles.length,
+          ...partialErrors,
           duration: Date.now() - startTime,
         }
       }
@@ -187,6 +197,7 @@ export class SyncService {
         success: true,
         entity: `articles-${warehouse}`,
         count: upsertedArticles.length,
+        ...partialErrors,
         duration: Date.now() - startTime,
       }
     } catch (error) {

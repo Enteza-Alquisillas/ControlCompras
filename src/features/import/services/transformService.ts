@@ -6,17 +6,55 @@ function normalizeVat(value: string | null): string | null {
     return normalized.startsWith('ES') ? normalized.slice(2) || null : normalized || null
 }
 
+/**
+ * Unification logic: If importing from Jerez and it has a Sevilla mapping,
+ * we use the Sevilla ID as the primary legacy_id to ensure they merge.
+ */
+function getEffectiveLegacyId(item: ArticleLegacy, warehouse: 'SEVILLA' | 'JEREZ'): number {
+    return (warehouse === 'JEREZ' && item.ID_MATERIAL_SEVILLA)
+        ? item.ID_MATERIAL_SEVILLA
+        : item.ID_MATERIAL
+}
+
 export const transformService = {
+    getEffectiveLegacyId,
+
+    /**
+     * Keep one row per effective legacy_id. Two Jerez articles sharing the same
+     * ID_MATERIAL_SEVILLA make Postgres reject the whole upsert ("ON CONFLICT DO UPDATE
+     * command cannot affect row a second time"). The row whose own ID matches the mapping
+     * is kept; the others are returned as warnings so the mapping gets fixed in SQL Server.
+     * Mirrors dedupeByEffectiveId in sync/src/transformers/articleTransformer.ts.
+     */
+    dedupeByEffectiveId(legacyData: ArticleLegacy[], warehouse: 'SEVILLA' | 'JEREZ') {
+        const groups = new Map<number, ArticleLegacy[]>()
+        for (const item of legacyData) {
+            const id = getEffectiveLegacyId(item, warehouse)
+            groups.set(id, [...(groups.get(id) ?? []), item])
+        }
+
+        const warnings: string[] = []
+        const droppedRows = new Set<ArticleLegacy>()
+        for (const [legacyId, items] of groups) {
+            if (items.length < 2) continue
+            const kept = items.find(i => i.ID_MATERIAL === legacyId) ?? items[0]
+            const dropped = items.filter(i => i !== kept)
+            dropped.forEach(i => droppedRows.add(i))
+            warnings.push(
+                `${warehouse}: artículo ${dropped.map(i => `${i.ID_MATERIAL} "${i.DESCRIPCION}"`).join(', ')} omitido: ` +
+                `su ID_MATERIAL_SEVILLA (${legacyId}) ya lo usa ${kept.ID_MATERIAL} "${kept.DESCRIPCION}". Hay que corregirlo en el programa de gestión.`
+            )
+        }
+
+        return { rows: legacyData.filter(i => !droppedRows.has(i)), warnings }
+    },
+
     /**
      * Map legacy articles to Supabase format
      */
     transformArticles(legacyData: ArticleLegacy[], warehouse: 'SEVILLA' | 'JEREZ') {
         return legacyData.map(item => {
-            // Unification logic: If importing from Jerez and it has a Sevilla mapping, 
-            // we use the Sevilla ID as the primary legacy_id to ensure they merge.
-            const effectiveLegacyId = (warehouse === 'JEREZ' && item.ID_MATERIAL_SEVILLA)
-                ? item.ID_MATERIAL_SEVILLA
-                : item.ID_MATERIAL
+            const effectiveLegacyId = getEffectiveLegacyId(item, warehouse)
 
             return {
                 legacy_id: effectiveLegacyId,

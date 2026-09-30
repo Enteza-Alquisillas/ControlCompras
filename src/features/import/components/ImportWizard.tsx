@@ -181,6 +181,9 @@ export function ImportWizard() {
                                             ) : (
                                                 <p className="text-sm text-red-600">Error: {result.error}</p>
                                             )}
+                                            {result.warnings?.map((warning, i) => (
+                                                <p key={i} className="text-sm text-amber-700 mt-1">Aviso: {warning}</p>
+                                            ))}
                                         </div>
                                         {result.success && (
                                             <span className="text-green-500">

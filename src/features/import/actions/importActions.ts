@@ -58,7 +58,9 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
     const supabase = await createAdminClient()
     try {
         console.log(`[Action] Importando artículos para ${warehouse}...`)
-        const rawData = await legacyService.getLegacyData('articles', warehouse)
+        const legacyData = await legacyService.getLegacyData('articles', warehouse)
+        const { rows: rawData, warnings } = transformService.dedupeByEffectiveId(legacyData, warehouse)
+        warnings.forEach(w => console.warn('[Action] Mapeo de artículo duplicado:', w))
         const transformedArticles = transformService.transformArticles(rawData, warehouse)
 
         const { data: warehouseData, error } = await (supabase as any)
@@ -75,12 +77,8 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
         if (!warehouseData) throw new Error(`Warehouse ${warehouse} no encontrado en base de datos.`)
 
         const stockRecords = rawData.map((item: any) => {
-            const effectiveLegacyId = (warehouse === 'JEREZ' && item.ID_MATERIAL_SEVILLA)
-                ? item.ID_MATERIAL_SEVILLA
-                : item.ID_MATERIAL
-
             return {
-                legacy_id: effectiveLegacyId,
+                legacy_id: transformService.getEffectiveLegacyId(item, warehouse),
                 warehouse_id: warehouseData.id,
                 // Sin filtrar por quantity > 0: si un articulo bajo a 0 (o quedo
                 // negativo por sobreventa en el sistema antiguo) el upsert debe
@@ -122,7 +120,9 @@ export async function importArticlesAction(warehouse: 'SEVILLA' | 'JEREZ'): Prom
         if (upsertResult.success) {
             await saveLastImportDate(warehouse)
         }
-        return upsertResult
+        return warnings.length > 0
+            ? { ...upsertResult, skippedCount: legacyData.length - rawData.length, warnings }
+            : upsertResult
     } catch (error: any) {
         console.error('[Action] Error en Importación de Artículos:', error)
         return { success: false, count: 0, table: 'articles', error: error.message }
