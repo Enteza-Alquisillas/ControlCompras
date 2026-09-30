@@ -69,29 +69,6 @@ export const transformService = {
     },
 
     /**
-     * Map legacy stock to Supabase format
-     */
-    transformStock(legacyData: ArticleLegacy[], warehouseIds: Record<string, string>) {
-        const stockRecords = []
-
-        // Find the warehouse ID for the current context (Sevilla or Jerez)
-        // Note: each warehouse call imports its own stock
-        const warehouseId = Object.values(warehouseIds)[0]
-
-        for (const item of legacyData) {
-            if (item.EXISTENCIA > 0) {
-                stockRecords.push({
-                    article_legacy_id: item.ID_MATERIAL,
-                    warehouse_id: warehouseId,
-                    quantity: item.EXISTENCIA,
-                })
-            }
-        }
-
-        return stockRecords
-    },
-
-    /**
      * Map legacy customers to Supabase format
      */
     transformCustomers(legacyData: CustomerLegacy[]) {

@@ -89,17 +89,14 @@ export function transformStock(
   warehouse: Warehouse,
   warehouseId: string
 ): TransformedStock[] {
-  return legacyData
-    .filter((item) => item.EXISTENCIA > 0)
-    .map((item) => {
-      const effectiveLegacyId = getEffectiveLegacyId(item, warehouse)
-
-      return {
-        legacy_id: effectiveLegacyId,
-        warehouse_id: warehouseId,
-        quantity: item.EXISTENCIA,
-      }
-    })
+  // No filtering by quantity > 0: if an article drops to 0 (or goes negative from
+  // overselling in the legacy system) the upsert must reflect it, or Supabase keeps
+  // the old, higher stock forever. Same rule as the web import (importActions.ts).
+  return legacyData.map((item) => ({
+    legacy_id: getEffectiveLegacyId(item, warehouse),
+    warehouse_id: warehouseId,
+    quantity: Math.max(item.EXISTENCIA ?? 0, 0),
+  }))
 }
 
 /**
