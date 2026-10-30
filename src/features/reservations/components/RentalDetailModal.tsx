@@ -8,6 +8,8 @@ import { estimateSeats } from '../utils/estimateSeats'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
+const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
+
 export function RentalDetailModal() {
     const { selectedRentalId, isDetailModalOpen, setDetailModalOpen, navigateToRental } = useReservationsStore()
     const [rental, setRental] = useState<RentalWithCustomer | null>(null)
@@ -133,6 +135,18 @@ export function RentalDetailModal() {
                                         <p className="text-[10px] font-bold text-red-600 uppercase tracking-tighter">Fecha Recogida</p>
                                         <p className="text-sm font-medium text-gray-900">
                                             {rental.pickup_date ? format(new Date(rental.pickup_date), "dd/MM/yyyy") : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">Fecha Captura</p>
+                                        <p className="text-sm font-medium text-gray-900">
+                                            {rental.captured_at ? format(new Date(rental.captured_at), "dd/MM/yy") : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter" title="Saldo del pedido en el sistema legacy">Importe</p>
+                                        <p className="text-sm font-bold text-gray-900 font-mono tabular-nums">
+                                            {rental.balance_amount != null ? currency.format(rental.balance_amount) : 'N/A'}
                                         </p>
                                     </div>
                                     {seatEstimate && (
