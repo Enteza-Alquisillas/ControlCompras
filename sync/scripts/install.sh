@@ -30,8 +30,7 @@ cp -r . "$INSTALL_DIR/"
 if [ ! -f "$INSTALL_DIR/.env" ]; then
     echo ""
     echo "WARNING: .env file not found!"
-    echo "Copy .env.example to .env and configure it:"
-    echo "  cp $INSTALL_DIR/.env.example $INSTALL_DIR/.env"
+    echo "Create $INSTALL_DIR/.env with the variables listed in README.md:"
     echo "  nano $INSTALL_DIR/.env"
     echo ""
 fi

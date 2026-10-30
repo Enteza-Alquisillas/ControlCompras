@@ -68,13 +68,13 @@ Cambios aplicados:
 - .claude/prompts/     (metodologias actualizadas)
 
 Archivos NO modificados:
-- CLAUDE.md (tu configuracion de proyecto)
+- AGENTS.md y la documentación canónica del proyecto
 - .mcp.json (tus tokens y credenciales)
 - src/ (tu codigo)
 ```
 
 ## Notas
 
-- Este comando NO modifica `CLAUDE.md`, `.mcp.json` ni el codigo fuente
+- Este comando NO modifica `AGENTS.md`, `.mcp.json` ni el codigo fuente
 - Solo actualiza la "toolbox" de desarrollo
-- Si necesitas actualizar `CLAUDE.md` manualmente, revisa el template en el repo SF
+- Si necesitas actualizar reglas del proyecto, revisa `AGENTS.md` y la documentación canónica

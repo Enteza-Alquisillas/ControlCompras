@@ -19,7 +19,7 @@ const EXCLUDED_INVENTORY_CODES = ['4502', '4503', '4504', '4505', '4506', '4507'
 
 /**
  * 3666 y 4514 están archivados en Odoo por motivos distintos y no resolubles
- * automáticamente (ver PRP-ODOO-004, sección Aprendizajes): 4514 es un archivado
+ * automáticamente: 4514 es un archivado
  * simple, pero 3666 tiene el default_code ocupado por un producto duplicado
  * activo distinto ("CAMARA FRIGORIFICA... (copia)"), por lo que una búsqueda
  * genérica por código enlazaría el stock al producto equivocado. Ambos quedan
@@ -178,7 +178,7 @@ export async function buildInventoryPreview(client: Odoo19Client): Promise<Odoo1
         jerezQty: legacy.jerezQty,
         status: 'manual_review',
         odooProductId: null,
-        reason: 'Requiere resolución manual en Odoo antes de reconciliar (ver PRP-ODOO-004)',
+        reason: 'Requiere resolución manual en Odoo antes de reconciliar.',
       })
       continue
     }

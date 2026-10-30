@@ -14,7 +14,7 @@ Antes de ejecutar CUALQUIER accion, muestra este mensaje al usuario:
 Este comando eliminara PERMANENTEMENTE:
 - .claude/ (comandos, agentes, PRPs, templates, skills)
 - .mcp.json (configuracion de MCPs)
-- CLAUDE.md (system prompt)
+- AGENTS.md (instrucciones de proyecto)
 - Referencias a "SaaS Factory" en el codigo
 
 El proyecto quedara como una aplicacion Next.js generica,
@@ -135,7 +135,7 @@ vercel
 ```bash
 # Eliminar archivos de SaaS Factory
 rm -f .mcp.json
-rm -f CLAUDE.md
+rm -f AGENTS.md
 rm -rf src/features/.template/
 rm -f src/features/README.md
 rm -f src/shared/README.md
@@ -157,7 +157,7 @@ Eject completado.
 Eliminado:
 - .claude/ (herramientas de desarrollo)
 - .mcp.json (configuracion MCPs)
-- CLAUDE.md (system prompt)
+- AGENTS.md (instrucciones de proyecto)
 - Templates y READMEs internos
 
 Actualizado:

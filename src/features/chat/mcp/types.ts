@@ -1,7 +1,7 @@
 // Herramientas built-in de mn_mcp_server que el chat NUNCA debe poder llamar,
 // sin importar los permisos reales de la API key (defensa en profundidad:
 // odoo_run_server_action en particular no comprueba modelo ni permisos en el
-// controlador instalado — ver Aprendizajes en PRP-ODOO-003). Cualquier tool
+// controlador instalado — ver invariantes de seguridad en AGENTS.md). Cualquier tool
 // que NO este en esta lista pasa el filtro, incluidas las Custom Tools que se
 // definan en Odoo (Ajustes -> MCP Server -> Custom Tools): esas nunca pueden
 // empezar por "odoo_" (el propio modulo lo prohibe), así que quedan fuera de

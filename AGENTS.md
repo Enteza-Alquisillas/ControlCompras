@@ -1,5 +1,10 @@
 # Contexto del proyecto para el agente programador
 
+Documentación de producto: `README.md`, `ARCHITECTURE.md`,
+`BUSINESS_LOGIC.md`, `OPERATIONS.md` y `sync/README.md`. Este archivo añade las
+invariantes específicas para trabajar con Odoo y el chat; prevalece cuando haya
+conflicto.
+
 Este documento te da el conocimiento necesario para trabajar en esta aplicación
 sin repetir errores de arquitectura ya descartados. Léelo entero antes de tocar
 nada relacionado con la integración con Odoo o con el chat. Lo que aquí se marca

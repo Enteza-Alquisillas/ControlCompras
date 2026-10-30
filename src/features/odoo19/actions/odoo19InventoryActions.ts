@@ -14,7 +14,7 @@ async function requireUser(): Promise<void> {
 
 /**
  * Recalcula el inventario en vivo (SQL Server + Odoo 19) en cada llamada.
- * No lee de Supabase: el espejo puede estar desactualizado (ver PRP-ODOO-004).
+ * No lee de Supabase: el espejo puede estar desactualizado.
  */
 export async function previewOdoo19InventoryLoad(): Promise<Odoo19InventoryPreview> {
   await requireUser()

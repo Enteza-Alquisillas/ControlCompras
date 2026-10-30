@@ -467,7 +467,7 @@ Error ocurre → Se arregla → Se documenta → NUNCA ocurre de nuevo
 |---------------|------------------|
 | Específico de esta feature | PRP actual (sección Aprendizajes) |
 | Aplica a múltiples features | `.claude/prompts/` relevante |
-| Aplica a TODO el proyecto | `CLAUDE.md` (sección No Hacer) |
+| Aplica a TODO el proyecto | `AGENTS.md` |
 
 ### Formato de Aprendizaje
 

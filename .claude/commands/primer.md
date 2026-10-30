@@ -71,7 +71,7 @@ Delega tareas complejas a agentes via `Task` tool:
 
 ### 1. Leer Identidad del Proyecto
 
-Lee `CLAUDE.md` y extrae:
+Lee `README.md`, `ARCHITECTURE.md`, `BUSINESS_LOGIC.md`, `OPERATIONS.md` y `AGENTS.md` y extrae:
 - **Nombre del proyecto**
 - **Problema que resuelve** (propuesta de valor)
 - **Usuario target** (avatar)

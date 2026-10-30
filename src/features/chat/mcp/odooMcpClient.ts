@@ -21,7 +21,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 // Cliente MCP hacia Odoo 19 (mn_mcp_server). Carril conversacional, completamente
 // separado del cliente JSON-2 usado por la exportacion determinista en
 // src/features/odoo19/ (protocolo, credencial y ciclo de vida propios).
-// Ver AGENTS.md secciones 2-4 y PRP-ODOO-003.
+// Ver AGENTS.md secciones 2-4.
 export async function createOdooMcpClient(): Promise<MCPClient | null> {
   const url = process.env.ODOO_MCP_URL
   const apiKey = process.env.ODOO_MCP_API_KEY
