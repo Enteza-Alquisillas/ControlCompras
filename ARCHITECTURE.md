@@ -47,7 +47,9 @@ datos actual. Las tablas principales son:
 
 - `warehouses`, `articles`, `article_stock`: catálogo unificado y stock por almacén.
 - `customers`: identidad legacy, datos de contacto, `vat` e indicador interno.
-- `rentals`, `rental_items`: cabecera y líneas de cada contrato.
+- `rentals`, `rental_items`: cabecera y líneas de cada contrato. `rentals.captured_at`
+  (`FECHA_CAPTURA`) y `rentals.balance_amount` (`SALDO` = pedido menos abonos)
+  vienen de la cabecera del evento; son NULL en contratos sincronizados antes de añadirlos.
 - `system_settings`: marcas de la última importación por almacén.
 
 Las migraciones SQL están en `supabase-migrations/`. No se aplican de forma

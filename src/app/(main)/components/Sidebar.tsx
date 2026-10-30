@@ -62,7 +62,25 @@ function NavIcon({ icon }: { icon: string }) {
   return <>{icons[icon]}</>
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed: boolean
+  onToggle: () => void
+}
+
+function ToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d={collapsed ? 'M13 5l7 7-7 7M5 5l7 7-7 7' : 'M11 19l-7-7 7-7m8 14l-7-7 7-7'}
+      />
+    </svg>
+  )
+}
+
+export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
   const [showWarning, setShowWarning] = useState(false)
   const isProduction = process.env.NODE_ENV === 'production'
@@ -76,20 +94,41 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside className={`fixed inset-y-0 left-0 ${collapsed ? 'w-16' : 'w-64'} bg-white border-r border-gray-200 flex flex-col transition-[width] duration-200 z-30`}>
       {/* Logo */}
-      <div className="h-20 flex items-center justify-center px-6 border-b border-gray-200 bg-white">
-        <Link href="/dashboard" className="w-full">
-          <img
-            src="/enteza-logo.png"
-            alt="ENTEZA"
-            className="w-full h-auto max-h-16 object-contain"
-          />
-        </Link>
+      <div className={`h-20 flex items-center justify-center border-b border-gray-200 bg-white ${collapsed ? 'px-2' : 'px-6'}`}>
+        {collapsed ? (
+          <button
+            onClick={onToggle}
+            aria-label="Expandir menú"
+            title="Expandir menú"
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+          >
+            <ToggleIcon collapsed />
+          </button>
+        ) : (
+          <>
+            <Link href="/dashboard" className="flex-1 min-w-0">
+              <img
+                src="/enteza-logo.png"
+                alt="ENTEZA"
+                className="w-full h-auto max-h-16 object-contain"
+              />
+            </Link>
+            <button
+              onClick={onToggle}
+              aria-label="Replegar menú"
+              title="Replegar menú"
+              className="ml-2 p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+            >
+              <ToggleIcon collapsed={false} />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="p-4 space-y-1 flex-1">
+      <nav className={`${collapsed ? 'p-2' : 'p-4'} space-y-1 flex-1 overflow-y-auto`}>
         {navigation.map((item) => {
           const isActive = pathname === item.href
 
@@ -97,13 +136,16 @@ export function Sidebar() {
             return (
               <span
                 key={item.name}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed"
+                title={collapsed ? `${item.name} (Pronto)` : undefined}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed ${collapsed ? 'justify-center' : ''}`}
               >
                 <NavIcon icon={item.icon} />
-                {item.name}
-                <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
-                  Pronto
-                </span>
+                {!collapsed && item.name}
+                {!collapsed && (
+                  <span className="ml-auto text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">
+                    Pronto
+                  </span>
+                )}
               </span>
             )
           }
@@ -113,13 +155,16 @@ export function Sidebar() {
               <button
                 key={item.name}
                 onClick={handleLocalOnlyClick}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                title={collapsed ? `${item.name} (Solo local)` : undefined}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors ${collapsed ? 'justify-center' : ''}`}
               >
                 <NavIcon icon={item.icon} />
-                {item.name}
-                <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                  Solo local
-                </span>
+                {!collapsed && item.name}
+                {!collapsed && (
+                  <span className="ml-auto text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                    Solo local
+                  </span>
+                )}
               </button>
             )
           }
@@ -128,22 +173,25 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActive
+              title={collapsed ? item.name : undefined}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center' : ''} ${isActive
                 ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                 }`}
             >
               <NavIcon icon={item.icon} />
-              {item.name}
+              {!collapsed && item.name}
             </Link>
           )
         })}
       </nav>
 
       {/* Sync Status */}
-      <div className="p-4 border-t border-gray-200 flex justify-center">
-        <LastImportIndicator />
-      </div>
+      {!collapsed && (
+        <div className="p-4 border-t border-gray-200 flex justify-center">
+          <LastImportIndicator />
+        </div>
+      )}
 
       {/* Warning Toast */}
       {showWarning && (

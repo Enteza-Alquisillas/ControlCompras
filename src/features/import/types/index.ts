@@ -24,6 +24,8 @@ export interface RentalLegacy {
     STATUS: string | null
     NOTAS: string | null
     LUGAR_DESCRIPCION: string | null
+    FECHA_CAPTURA: string | null
+    SALDO: number | null
     // Fields from Detail table
     ID_MATERIAL: number
     CANTIDAD: number

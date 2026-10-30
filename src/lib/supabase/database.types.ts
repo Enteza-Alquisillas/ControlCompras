@@ -155,6 +155,8 @@ export type Database = {
       }
       rentals: {
         Row: {
+          balance_amount: number | null
+          captured_at: string | null
           created_at: string | null
           created_by: string | null
           customer_id: string
@@ -174,6 +176,8 @@ export type Database = {
           warehouse_id: string | null
         }
         Insert: {
+          balance_amount?: number | null
+          captured_at?: string | null
           created_at?: string | null
           created_by?: string | null
           customer_id: string
@@ -193,6 +197,8 @@ export type Database = {
           warehouse_id?: string | null
         }
         Update: {
+          balance_amount?: number | null
+          captured_at?: string | null
           created_at?: string | null
           created_by?: string | null
           customer_id?: string

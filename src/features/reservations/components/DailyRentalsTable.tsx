@@ -7,6 +7,8 @@ import { RentalWithCustomer } from '../types'
 import { estimateSeats } from '../utils/estimateSeats'
 import { format } from 'date-fns'
 
+const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
+
 export function DailyRentalsTable() {
     const { selectedDate, setSelectedRentalId, setDetailModalOpen, selectedArticleId } = useReservationsStore()
     const [rentals, setRentals] = useState<RentalWithCustomer[]>([])
@@ -41,18 +43,20 @@ export function DailyRentalsTable() {
                         <tr>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left w-16">CONTRATO</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left">CLIENTE</th>
+                            <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">CAPTURA</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">ENTREGA</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-24">RECOGIDA</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-center w-16">PLAZAS</th>
+                            <th className="border-r border-gray-300 px-2 py-1.5 text-right w-28" title="Saldo del pedido en el sistema legacy">IMPORTE</th>
                             <th className="border-r border-gray-300 px-2 py-1.5 text-left">LUGAR</th>
                             <th className="px-2 py-1.5 text-left">NOTAS</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
                         {loading ? (
-                            <tr><td colSpan={7} className="p-10 text-center italic text-gray-500">Buscando eventos...</td></tr>
+                            <tr><td colSpan={9} className="p-10 text-center italic text-gray-500">Buscando eventos...</td></tr>
                         ) : rentals.length === 0 ? (
-                            <tr><td colSpan={7} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
+                            <tr><td colSpan={9} className="p-10 text-center text-gray-400 italic">No hay eventos para esta fecha</td></tr>
                         ) : (
                             rentals
                             .filter((r: RentalWithCustomer) => !selectedArticleId || r.items?.some(item => item.article_id === selectedArticleId))
@@ -78,6 +82,9 @@ export function DailyRentalsTable() {
                                         `}>
                                             {r.customer?.name || 'S/N'}
                                         </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 text-center text-gray-600">
+                                            {r.captured_at ? format(new Date(r.captured_at), 'dd/MM/yy') : '-'}
+                                        </td>
                                         <td className="border-r border-gray-200 px-2 py-1 text-center font-bold text-green-700">
                                             {r.delivery_date ? format(new Date(r.delivery_date), 'dd/MM') : '-'}
                                         </td>
@@ -100,6 +107,9 @@ export function DailyRentalsTable() {
                                             ) : (
                                                 <span className="text-gray-300">—</span>
                                             )}
+                                        </td>
+                                        <td className="border-r border-gray-200 px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap">
+                                            {r.balance_amount != null ? currency.format(r.balance_amount) : '-'}
                                         </td>
                                         <td className="border-r border-gray-200 px-2 py-1 truncate max-w-[200px]" title={r.delivery_address || ''}>
                                             {r.delivery_address || 'N/A'}

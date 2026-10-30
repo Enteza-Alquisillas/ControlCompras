@@ -251,7 +251,9 @@ export async function importRentalsAction(warehouse: 'SEVILLA' | 'JEREZ', startD
                     delivery_date: deliveryDate,
                     pickup_date: pickupDate,
                     status: item.STATUS || 'confirmed',
-                    notes: item.NOTAS
+                    notes: item.NOTAS,
+                    captured_at: toDateString(item.FECHA_CAPTURA),
+                    balance_amount: item.SALDO ?? null
                 })
             }
         })

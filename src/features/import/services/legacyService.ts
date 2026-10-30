@@ -84,6 +84,8 @@ export const legacyService = {
               e.STATUS,
               e.NOTAS,
               e.LUGAR_DESCRIPCION,
+              e.FECHA_CAPTURA,
+              e.SALDO,
               ed.ID_MATERIAL,
               ed.CANTIDAD,
               ed.NOTAS_ITEM

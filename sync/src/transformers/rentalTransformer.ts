@@ -111,6 +111,8 @@ export function transformRentals(
       pickup_date: pickupDate,
       status: item.STATUS || 'confirmed',
       notes: item.NOTAS,
+      captured_at: toDateString(item.FECHA_CAPTURA),
+      balance_amount: item.SALDO ?? null,
     })
   })
 

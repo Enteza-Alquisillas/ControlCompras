@@ -45,7 +45,7 @@ Ver `references/schema.md` para el detalle completo de tablas, columnas y RPCs. 
 
 ## Lo que este esquema NO tiene
 
-- **Ningun precio ni importe** (`articles` y `rental_items` no tienen columna de precio/coste). Preguntas de facturacion, ingresos o "cuanto se ha vendido en €" **no se pueden responder desde Supabase**. Dilo explicitamente; si esa informacion existe en Odoo 19, sugiere consultarla alli en vez de estimarla.
+- **Casi ningun precio ni importe**: `articles` y `rental_items` no tienen precio/coste. Solo `rentals.balance_amount` (SALDO legacy = pedido menos abonos, no es facturacion; puede ser NULL en contratos anteriores al cambio) y `rentals.captured_at`. Preguntas de facturacion, ingresos o "cuanto se ha vendido en €" **no se pueden responder desde Supabase**. Dilo explicitamente; si esa informacion existe en Odoo 19, sugiere consultarla alli en vez de estimarla.
 - **Datos de Odoo 19 posteriores a la migracion.** Esta base es la foto migrada del sistema antiguo (mas cualquier reimportacion posterior desde SQL Server); un pedido creado directamente en Odoo despues de la migracion no aparece aqui.
 
 ## Estacionalidad y comparativas entre periodos
